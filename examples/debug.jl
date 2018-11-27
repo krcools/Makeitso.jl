@@ -1,4 +1,4 @@
-module JLMake
+module Mod2
 
 export Target
 export make
@@ -15,12 +15,13 @@ mutable struct Target
     timestamp
     cache
     name
+    function Target(name, recipe, deps...)
+        @warn "Inner ctr called"
+        t = new(Target[deps...], recipe, 0.0, nothing, name)
+    end
 end
 
-function Target(name, recipe, deps::Vector{Target})
-    @warn "Inner ctr called"
-    t = Target(deps, recipe, 0.0, nothing, name)
-end
+
 
 function make(target)
     for t in target.deps
@@ -105,7 +106,7 @@ macro target(out, recipe)
         push!(tnames, esc(Symbol("target_", arg)))
     end
 
-    :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)), Target[$(tnames...)]))
+    :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)), $(tnames...)))
 end
 
 
@@ -115,3 +116,13 @@ macro make(vname)
 end
 
 end # module
+
+using .Mod2
+
+@target A ()->3
+@target B ()->3
+@target C ()->3
+@target D (A,B,C)->A.+B.+C
+
+# tA = Target(:A, A->3)
+# tB = Target(:B, (A,B,C)->5, tA, tA, tA)
