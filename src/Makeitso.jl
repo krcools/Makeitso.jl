@@ -1,4 +1,4 @@
-module JLMake
+module Makeitso
 
 export Target
 export make

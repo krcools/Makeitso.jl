@@ -1,4 +1,4 @@
-using JLMake
+using Makeitso
 
 @target A ()->rand(10)
 @target B ()->rand(10)
