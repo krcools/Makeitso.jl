@@ -6,7 +6,7 @@ using JLMake
 
 
 @target A ()->rand(10)
-@target B ()->rand(10)
+@target B ()->rand(9+1)
 @target C (A,B)->A.+B
 
 
@@ -14,12 +14,5 @@ using JLMake
 
 @make A
 @make C
-
-#@update! B
-@make C
-C[end]
-
-
-@which JLMake.Target(:D, ((A, B, C)->(A .+ B) .+ C), [target_A, target_B, target_C])
-
-JLMake.Target(:D, ((A, B, C)->(A .+ B) .+ C), [target_A, target_B, target_C])
+@make D
+@show (@make D)[end]

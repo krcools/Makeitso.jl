@@ -1,128 +1,50 @@
-module Mod2
+module Mod
 
-export Target
-export make
-export @target
-export @make
-export @update!
+export @changeifexists
 
-using JLD2
-using FileIO
-
-mutable struct Target
-    deps::Vector{Target}
-    recipe
-    timestamp
+mutable struct MyStruct
     cache
-    name
-    function Target(name, recipe, deps...)
-        @warn "Inner ctr called"
-        t = new(Target[deps...], recipe, 0.0, nothing, name)
-    end
+    hash
 end
 
-
-
-function make(target)
-    for t in target.deps
-        make(t)
+# Position independent hashing of expressions
+pihash(x) = pihash(x, zero(UInt))
+pihash(x::Expr,h) = pihash(x.args, pihash(x.head, h))
+pihash(x::LineNumberNode,h) = h
+function pihash(x::Array,h)
+    for y in x
+        h = pihash(y, h)
     end
+    h
+end
+pihash(x::Any,h) = hash(x,h)
 
-    varname = String(target.name)
-    filename = String(target.name) * ".jld2"
 
-    # No file means this is the first run ever
-    !isfile(filename) && (update!(target); return target.cache)
-
-    # Target was made in previous session. Is it up-to-date?
-    deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
-    if target.cache == nothing
-        d = load(filename)
-        if d["timestamp"] < deps_stamp
-            update!(target)
-        else
-            target.timestamp = d["timestamp"]
-            target.cache = d[varname]
+macro changeifexists(x, recipe)
+    exists = isdefined(__module__, x)
+    @show recipe
+    @show h = pihash(recipe)
+    if exists
+        xp = quote
+            if $h != $(esc(x)).hash
+                $(esc(x)).cache = nothing
+            end
         end
-        return target.cache
+    else
+        xp = :($(esc(x)) = MyStruct(nothing, $h))
     end
 
-    # Target was computed in this session. Is it up-to-date?
-    if target.timestamp < deps_stamp
-        update!(target)
-    end
-
-    return target.cache
+    return xp
 end
 
-
-function update!(target::Target)
-
-    varname = String(target.name)
-    filename = String(target.name) * ".jld2"
-
-    target.cache = target.recipe(getfield.(target.deps, :cache)...)
-    target.timestamp = time()
-    save(filename, Dict(
-        varname => target.cache,
-        "timestamp" => target.timestamp))
 end
 
-function update!(target::Target, val)
+using .Mod
+@changeifexists A (A)->3
+A.cache = 3
 
-    target.cache = val
-    target.timestamp = time()
+@changeifexists A (A)->3
+@show A.cache == 3
 
-    varname = String(target.name)
-    filename = String(target.name) * ".jld2"
-
-    save(filename, Dict(
-        varname => target.cache,
-        "timestamp" => target.timestamp))
-end
-
-macro update!(var)
-    :(update!($(esc(Symbol("target_",var)))))
-end
-
-macro update!(var, val)
-    :(update!($(esc(Symbol("target_",var))), $(esc(val))))
-end
-
-macro target(out, recipe)
-
-    @assert out isa Symbol
-    @assert recipe.head == :->
-
-    out_target = Symbol("target_", out)
-
-    vnames = [] # A, B, C
-    tnames = [] # target, target_B, target_C
-
-    tp = recipe.args[1]
-    @assert tp.head == :tuple
-    for arg in tp.args
-        push!(vnames, arg)
-        push!(tnames, esc(Symbol("target_", arg)))
-    end
-
-    :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)), $(tnames...)))
-end
-
-
-macro make(vname)
-    tname = Symbol("target_", vname)
-    :($(esc(vname)) = make($(esc(tname))))
-end
-
-end # module
-
-using .Mod2
-
-@target A ()->3
-@target B ()->3
-@target C ()->3
-@target D (A,B,C)->A.+B.+C
-
-# tA = Target(:A, A->3)
-# tB = Target(:B, (A,B,C)->5, tA, tA, tA)
+@changeifexists A (A)->4
+@show A.cache == nothing
