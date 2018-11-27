@@ -50,16 +50,17 @@ function make(target, level=0)
             @info "level $level dep $(target.name): restored from disk."
         end
         return target.cache
-        @info "level $level dep $(target.name): retrieved from memory cache."
     end
 
     # Target was computed in this session. Is it up-to-date?
     if target.timestamp < deps_stamp
         update!(target)
         @info "level $level dep $(target.name): computed from dependencies [memory cache out-of-date]."
+        return target.cache
+    else
+        @info "level $level dep $(target.name): retrieved from memory cache."
+        return target.cache
     end
-
-    return target.cache
 end
 
 
