@@ -19,20 +19,23 @@ mutable struct Target
 end
 
 function Target(name, recipe, deps::Vector{Target}, hash)
-    @warn "Inner ctr called"
     t = Target(deps, recipe, 0.0, nothing, name, hash)
 end
 
-function make(target)
+function make(target, level=0)
     for t in target.deps
-        make(t)
+        make(t, level+1)
     end
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
 
     # No file means this is the first run ever
-    !isfile(filename) && (update!(target); return target.cache)
+    if !isfile(filename)
+        update!(target)
+        @info "level $level dep $(target.name): computed from dependencies [initial computation]."
+        return target.cache
+    end
 
     # Target was made in previous session. Is it up-to-date?
     deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
@@ -40,16 +43,20 @@ function make(target)
         d = load(filename)
         if d["timestamp"] < deps_stamp
             update!(target)
+            @info "level $level dep $(target.name): computed from dependencies [store out-of-date]."
         else
             target.timestamp = d["timestamp"]
             target.cache = d[varname]
+            @info "level $level dep $(target.name): restored from disk."
         end
         return target.cache
+        @info "level $level dep $(target.name): retrieved from memory cache."
     end
 
     # Target was computed in this session. Is it up-to-date?
     if target.timestamp < deps_stamp
         update!(target)
+        @info "level $level dep $(target.name): computed from dependencies [memory cache out-of-date]."
     end
 
     return target.cache
@@ -114,10 +121,15 @@ macro target(out, recipe)
     tnames = [] # target, target_B, target_C
 
     tp = recipe.args[1]
-    @assert tp.head == :tuple
-    for arg in tp.args
-        push!(vnames, arg)
-        push!(tnames, esc(Symbol("target_", arg)))
+    if tp isa Symbol
+        push!(vnames, tp)
+        push!(tnames, esc(Symbol("target_", tp)))
+    else
+        @assert tp.head == :tuple
+        for arg in tp.args
+            push!(vnames, arg)
+            push!(tnames, esc(Symbol("target_", arg)))
+        end
     end
 
     exists = isdefined(__module__, out_target)
