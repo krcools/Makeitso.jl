@@ -1,4 +1,4 @@
-# JLMake.jl
+# Makeitso.jl
 
 Make-like behavior to facilitate writing long-running scripts. The idea is that the user supplied the dependencies between targets and recipes for how to make a target from those dependencies. If changes happen to one recipe (cf. if one edits one source file in a make project), one affected variables will be recomputed.
 
