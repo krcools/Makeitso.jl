@@ -41,7 +41,10 @@ function make(target, level=0)
     deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
     if target.cache == nothing
         d = load(filename)
-        if d["timestamp"] < deps_stamp
+        if d["hash"] != target.hash
+            update!(target)
+            @info "level $level dep $(target.name): computed from dependencies [recipe modified]."
+        elseif d["timestamp"] < deps_stamp
             update!(target)
             @info "level $level dep $(target.name): computed from dependencies [store out-of-date]."
         else
@@ -73,7 +76,8 @@ function update!(target::Target)
     target.timestamp = time()
     save(filename, Dict(
         varname => target.cache,
-        "timestamp" => target.timestamp))
+        "timestamp" => target.timestamp,
+        "hash" => target.hash))
 end
 
 function update!(target::Target, val)
@@ -86,7 +90,8 @@ function update!(target::Target, val)
 
     save(filename, Dict(
         varname => target.cache,
-        "timestamp" => target.timestamp))
+        "timestamp" => target.timestamp,
+        "hash" => target.hash))
 end
 
 
