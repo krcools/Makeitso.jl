@@ -1,13 +1,15 @@
 module Makeitso
 
-export Target
-export make
+#export Target
+#export make
 export @target
 export @make
-export @update!
+#export @update!
 
 using JLD2
 using FileIO
+
+const STORE_DIR = "store"
 
 mutable struct Target
     deps::Vector{Target}
@@ -29,6 +31,7 @@ function make(target, level=0)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
+    filename = joinpath(STORE_DIR, filename)
 
     # No file means this is the first run ever
     if !isfile(filename)
@@ -71,6 +74,8 @@ function update!(target::Target)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
+    filename = joinpath(STORE_DIR, filename)
+    mkpath(STORE_DIR)
 
     target.cache = target.recipe(getfield.(target.deps, :cache)...)
     target.timestamp = time()
@@ -80,19 +85,19 @@ function update!(target::Target)
         "hash" => target.hash))
 end
 
-function update!(target::Target, val)
-
-    target.cache = val
-    target.timestamp = time()
-
-    varname = String(target.name)
-    filename = String(target.name) * ".jld2"
-
-    save(filename, Dict(
-        varname => target.cache,
-        "timestamp" => target.timestamp,
-        "hash" => target.hash))
-end
+# function update!(target::Target, val)
+#
+#     target.cache = val
+#     target.timestamp = time()
+#
+#     varname = String(target.name)
+#     filename = String(target.name) * ".jld2"
+#
+#     save(filename, Dict(
+#         varname => target.cache,
+#         "timestamp" => target.timestamp,
+#         "hash" => target.hash))
+# end
 
 
 # Position independent hashing of expressions
@@ -107,13 +112,13 @@ function pihash(x::Array,h)
 end
 pihash(x::Any,h) = hash(x,h)
 
-macro update!(var)
-    :(update!($(esc(Symbol("target_",var)))))
-end
-
-macro update!(var, val)
-    :(update!($(esc(Symbol("target_",var))), $(esc(val))))
-end
+# macro update!(var)
+#     :(update!($(esc(Symbol("target_",var)))))
+# end
+#
+# macro update!(var, val)
+#     :(update!($(esc(Symbol("target_",var))), $(esc(val))))
+# end
 
 macro target(out, recipe)
 
@@ -122,6 +127,7 @@ macro target(out, recipe)
 
     out_target = Symbol("target_", out)
     file_name = String(out) * ".jld2"
+    file_name = joinpath(STORE_DIR, file_name)
 
     vnames = [] # A, B, C
     tnames = [] # target, target_B, target_C
@@ -160,7 +166,6 @@ end
 
 macro make(vname)
     tname = Symbol("target_", vname)
-    #:($(esc(vname)) = make($(esc(tname))))
     :(make($(esc(tname))))
 end
 
