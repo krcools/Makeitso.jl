@@ -9,7 +9,8 @@ export @make
 using JLD2
 using FileIO
 
-const STORE_DIR = "store"
+STORE_DIR = "store"
+setstore(s) = (STORE_DIR=s)
 
 mutable struct Target
     deps::Vector{Target}
