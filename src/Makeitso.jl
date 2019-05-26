@@ -10,7 +10,7 @@ using JLD2
 using FileIO
 
 STORE_DIR = "store"
-setstore(s) = (STORE_DIR=s)
+setstore(s) = (global STORE_DIR=s)
 
 mutable struct Target
     deps::Vector{Target}
