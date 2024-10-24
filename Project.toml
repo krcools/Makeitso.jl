@@ -1,0 +1,13 @@
+name = "Makeitso"
+uuid = "5616b7aa-48d8-5ba3-83fe-06b58d5edc20"
+authors = ["Kristof Cools <krcools@gmail.com> and contributors"]
+version = "0.2.0"
+
+[deps]
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+
+[compat]
+FileIO = "1.11"
+JLD2 = "0.4, 0.5"
+julia = "1.6"

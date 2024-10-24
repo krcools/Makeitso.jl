@@ -167,7 +167,9 @@ end
 
 macro make(vname)
     tname = Symbol("target_", vname)
-    :(make($(esc(tname))))
+    xp = :($(esc(vname)) = make($(esc(tname))))
+    # @show xp
+    return xp
 end
 
 end # module
