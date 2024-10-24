@@ -9,7 +9,7 @@ export @make
 using JLD2
 using FileIO
 
-STORE_DIR = "store"
+STORE_DIR = "data"
 setstore(s) = (global STORE_DIR=s)
 
 mutable struct Target
