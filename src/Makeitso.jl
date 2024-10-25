@@ -8,9 +8,11 @@ export @make
 
 using JLD2
 using FileIO
+using DrWatson
+using BakerStreet
 
-STORE_DIR = "data"
-setstore(s) = (global STORE_DIR=s)
+# STORE_DIR = "data"
+# setstore(s) = (global STORE_DIR=s)
 
 mutable struct Target
     deps::Vector{Target}
@@ -19,10 +21,11 @@ mutable struct Target
     cache
     name
     hash
+    simname
 end
 
-function Target(name, recipe, deps::Vector{Target}, hash)
-    t = Target(deps, recipe, 0.0, nothing, name, hash)
+function Target(name, recipe, deps::Vector{Target}, hash, simname)
+    t = Target(deps, recipe, 0.0, nothing, name, hash, simname)
 end
 
 function make(target, level=0)
@@ -32,6 +35,7 @@ function make(target, level=0)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
+    STORE_DIR = datadir(target.simname)
     filename = joinpath(STORE_DIR, filename)
 
     # No file means this is the first run ever
@@ -75,6 +79,7 @@ function update!(target::Target)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
+    STORE_DIR = datadir(target.simname)
     filename = joinpath(STORE_DIR, filename)
     mkpath(STORE_DIR)
 
@@ -126,9 +131,10 @@ macro target(out, recipe)
     @assert out isa Symbol
     @assert recipe.head == :->
 
+    splitext(basename(string(__source__.file)))[1]
     out_target = Symbol("target_", out)
     file_name = String(out) * ".jld2"
-    file_name = joinpath(STORE_DIR, file_name)
+    # file_name = joinpath(STORE_DIR, file_name)
 
     vnames = [] # A, B, C
     tnames = [] # target, target_B, target_C
@@ -155,11 +161,15 @@ macro target(out, recipe)
                 $(esc(out_target)).timestamp = 0.0
                 $(esc(out_target)).cache = nothing
                 $(esc(out_target)).hash = $recipe_hash
-                isfile($file_name) && rm($file_name)
+                full_path = joinpath(DrWatson.datadir($(esc(out_target)).simname), $file_name)
+                isfile(full_path) && rm(full_path)
+                # isfile($file_name) && rm($file_name)
             end
         end
     else
-        xp = :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)), Target[$(tnames...)], $recipe_hash))
+        simname = splitext(basename(string(__source__.file)))[1]
+        xp = :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)),
+            Target[$(tnames...)], $recipe_hash, $simname))
     end
     return xp
 end

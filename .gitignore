@@ -1,2 +1,4 @@
 *.jld2
-store
+store/
+data/
+Manifest.toml
