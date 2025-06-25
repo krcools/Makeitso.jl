@@ -2,12 +2,13 @@ module Makeitso
 
 export @target
 export @make
-#export @update!
+export make
 
 using JLD2
 using FileIO
 using DrWatson
 using BakerStreet
+
 
 mutable struct Target
     deps::Vector{Target}
@@ -17,25 +18,27 @@ mutable struct Target
     name
     hash
     relpath
+    params
 end
 
 function Target(name, recipe, deps::Vector{Target}, hash, simname)
-    t = Target(deps, recipe, 0.0, nothing, name, hash, simname)
+    t = Target(deps, recipe, 0.0, nothing, name, hash, simname, nothing)
 end
 
-function make(target, level=0)
+function make(target, level=0; kwargs...)
+
     for t in target.deps
-        make(t, level+1)
+        make(t, level+1; kwargs...)
     end
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
     STORE_DIR = datadir(target.relpath)
-    filename = joinpath(STORE_DIR, filename)
+    fullpath = joinpath(STORE_DIR, filename)
 
     # No file means this is the first run ever
-    if !isfile(filename)
-        update!(target)
+    if !isfile(fullpath)
+        update!(target; kwargs...)
         @info "level $level dep $(target.name): computed from dependencies [initial computation]."
         return target.cache
     end
@@ -43,16 +46,20 @@ function make(target, level=0)
     # Target was made in previous session. Is it up-to-date?
     deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
     if target.cache == nothing
-        d = load(filename)
+        d = load(fullpath)
         if d["hash"] != target.hash
-            update!(target)
-            @info "level $level dep $(target.name): computed from dependencies [recipe modified]."
+            update!(target; kwargs...)
+            @info "level $level dep $(target.name) on disk but recomputed from deps [recipe modified]."
+        elseif d["params"] != kwargs
+            update!(target; kwargs...)
+            @info "level $level dep $(target.name) on disk but recomputed from deps [parameters modified]."
         elseif d["timestamp"] < deps_stamp
-            update!(target)
-            @info "level $level dep $(target.name): computed from dependencies [store out-of-date]."
+            update!(target; kwargs...)
+            @info "level $level dep $(target.name) on disk but recomputed from deps [out-of-date]."
         else
             target.timestamp = d["timestamp"]
             target.cache = d[varname]
+            target.params = d["params"]
             @info "level $level dep $(target.name): restored from disk."
         end
         return target.cache
@@ -60,17 +67,21 @@ function make(target, level=0)
 
     # Target was computed in this session. Is it up-to-date?
     if target.timestamp < deps_stamp
-        update!(target)
-        @info "level $level dep $(target.name): computed from dependencies [memory cache out-of-date]."
+        update!(target; kwargs...)
+        @info "level $level dep $(target.name) in memory but recomputed from deps [out-of-date]."
+        return target.cache
+    elseif target.params != kwargs
+        update!(target; kwargs...)
+        @info "level $level dep $(target.name) in memory but recomputed from deps [parameters modified]."
         return target.cache
     else
-        @info "level $level dep $(target.name): retrieved from memory cache."
+        @info "level $level dep $(target.name): retrieved from memory."
         return target.cache
     end
 end
 
 
-function update!(target::Target)
+function update!(target::Target; kwargs...)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
@@ -78,12 +89,14 @@ function update!(target::Target)
     filename = joinpath(STORE_DIR, filename)
     mkpath(STORE_DIR)
 
-    target.cache = target.recipe(getfield.(target.deps, :cache)...)
+    target.params = kwargs
+    target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
     target.timestamp = time()
     save(filename, Dict(
         varname => target.cache,
         "timestamp" => target.timestamp,
-        "hash" => target.hash))
+        "hash" => target.hash,
+        "params" => target.params))
 end
 
 
@@ -105,24 +118,30 @@ macro target(out, recipe)
 
     @assert out isa Symbol
     @assert recipe.head == :->
+    
+    # modify recipe to accept kwargs
+    tp = recipe.args[1]
 
     splitext(basename(string(__source__.file)))[1]
-    out_target = Symbol("target_", out)
+    # out_target = Symbol("target_", out)
+    out_target = out
     file_name = String(out) * ".jld2"
-    # file_name = joinpath(STORE_DIR, file_name)
 
-    vnames = [] # A, B, C
+    # vnames = [] # A, B, C
     tnames = [] # target, target_B, target_C
 
-    tp = recipe.args[1]
+    # tp = recipe.args[1]
     if tp isa Symbol
-        push!(vnames, tp)
-        push!(tnames, esc(Symbol("target_", tp)))
+        # push!(vnames, tp)
+        # push!(tnames, esc(Symbol("target_", tp)))
+        push!(tnames, esc(tp))
     else
         @assert tp.head == :tuple
         for arg in tp.args
-            push!(vnames, arg)
-            push!(tnames, esc(Symbol("target_", arg)))
+            arg isa Symbol || continue
+            # push!(vnames, arg)
+            # push!(tnames, esc(Symbol("target_", arg)))
+            push!(tnames, esc(arg))
         end
     end
 
@@ -156,9 +175,13 @@ macro target(out, recipe)
 end
 
 
-macro make(vname)
-    tname = Symbol("target_", vname)
-    xp = :($(esc(vname)) = make($(esc(tname))))
+macro make(vname, vars...)
+    # println(vars)
+    # expr = symdict_expr_from_vars(vars)
+    # println(expr)
+    # tname = Symbol("target_", vname)
+    tname = vname
+    xp = :(make($(esc(tname))))
     return xp
 end
 

@@ -16,13 +16,13 @@ using Makeitso
 @target C (A,B)->A.+B
 @target D (A,B,C)->A.+B.+C
 
-x = (@make D)[end]
+x = make(D)[end]
 @assert x == 30
 
 @target B ()->pi
 println("--- Recipe for B modified! ---")
 
-x = (@make D)[end]
+x = make(D)[end]
 @assert x ≈ (20+2pi)
 
 ```
@@ -87,6 +87,7 @@ julia> include("examples/hello.jl")
 ## Notes
 
 * Recipe validity is tracked by storing the hash of the corresponding julia `Expr`
-* The `@target` macro creates a variable `target_A` etc. in the module namespace, excluding these names as valid variable names in your script.
+* The `@target` macro creates a variable `A` etc which has type `Target` and should not be used to hold the result of building target A. This is by design to discourage creating *untracked* variables.
 * Recipes resulting in `nothing` are not valid as `nothing` indicates absence of an in-memory cached value.
 * Up-dates to *normal* non-target variables are not tracked and changes to them will not trigger recomputation of dependents. Functions taking zero arguments and returning a constant value are the appropriate way to allow for changeable parameters.
+* The correct way to supply parameters is to use keywords. For example `make(D; p=314)` will propagate this keyword to all recipes of `D` and its dependencies. See `examples/hello_kw.jl` for details. 
