@@ -1,7 +1,5 @@
 module Makeitso
 
-#export Target
-#export make
 export @target
 export @make
 #export @update!
@@ -11,9 +9,6 @@ using FileIO
 using DrWatson
 using BakerStreet
 
-# STORE_DIR = "data"
-# setstore(s) = (global STORE_DIR=s)
-
 mutable struct Target
     deps::Vector{Target}
     recipe
@@ -21,7 +16,7 @@ mutable struct Target
     cache
     name
     hash
-    simname
+    relpath
 end
 
 function Target(name, recipe, deps::Vector{Target}, hash, simname)
@@ -35,7 +30,7 @@ function make(target, level=0)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
-    STORE_DIR = datadir(target.simname)
+    STORE_DIR = datadir(target.relpath)
     filename = joinpath(STORE_DIR, filename)
 
     # No file means this is the first run ever
@@ -79,7 +74,7 @@ function update!(target::Target)
 
     varname = String(target.name)
     filename = String(target.name) * ".jld2"
-    STORE_DIR = datadir(target.simname)
+    STORE_DIR = datadir(target.relpath)
     filename = joinpath(STORE_DIR, filename)
     mkpath(STORE_DIR)
 
@@ -91,19 +86,6 @@ function update!(target::Target)
         "hash" => target.hash))
 end
 
-# function update!(target::Target, val)
-#
-#     target.cache = val
-#     target.timestamp = time()
-#
-#     varname = String(target.name)
-#     filename = String(target.name) * ".jld2"
-#
-#     save(filename, Dict(
-#         varname => target.cache,
-#         "timestamp" => target.timestamp,
-#         "hash" => target.hash))
-# end
 
 
 # Position independent hashing of expressions
@@ -118,13 +100,6 @@ function pihash(x::Array,h)
 end
 pihash(x::Any,h) = hash(x,h)
 
-# macro update!(var)
-#     :(update!($(esc(Symbol("target_",var)))))
-# end
-#
-# macro update!(var, val)
-#     :(update!($(esc(Symbol("target_",var))), $(esc(val))))
-# end
 
 macro target(out, recipe)
 
@@ -161,15 +136,21 @@ macro target(out, recipe)
                 $(esc(out_target)).timestamp = 0.0
                 $(esc(out_target)).cache = nothing
                 $(esc(out_target)).hash = $recipe_hash
-                full_path = joinpath(DrWatson.datadir($(esc(out_target)).simname), $file_name)
+                full_path = joinpath(DrWatson.datadir($(esc(out_target)).relpath), $file_name)
                 isfile(full_path) && rm(full_path)
                 # isfile($file_name) && rm($file_name)
             end
         end
     else
-        simname = splitext(basename(string(__source__.file)))[1]
+
+        fn = string(__source__.file)
+        rp = dirname(relpath(fn, projectdir()))
+        sn = splitext(basename(fn))[1]
+        path = joinpath(rp, sn)
+
+
         xp = :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)),
-            Target[$(tnames...)], $recipe_hash, $simname))
+            Target[$(tnames...)], $recipe_hash, $path))
     end
     return xp
 end
@@ -178,7 +159,6 @@ end
 macro make(vname)
     tname = Symbol("target_", vname)
     xp = :($(esc(vname)) = make($(esc(tname))))
-    # @show xp
     return xp
 end
 
