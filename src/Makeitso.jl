@@ -116,6 +116,9 @@ pihash(x::Any,h) = hash(x,h)
 
 macro target(out, recipe)
 
+    # @show out
+    # @show recipe
+
     @assert out isa Symbol
     @assert recipe.head == :->
     
@@ -136,6 +139,7 @@ macro target(out, recipe)
         # push!(tnames, esc(Symbol("target_", tp)))
         push!(tnames, esc(tp))
     else
+        # @show tp.head
         @assert tp.head == :tuple
         for arg in tp.args
             arg isa Symbol || continue
