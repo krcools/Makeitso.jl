@@ -1,4 +1,5 @@
 [deps]
 BakerStreet = "79c3fcf7-ab10-4df2-b330-e2e1bedd9b25"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 Makeitso = "5616b7aa-48d8-5ba3-83fe-06b58d5edc20"

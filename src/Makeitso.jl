@@ -119,7 +119,6 @@ macro target(out, recipe)
     @assert out isa Symbol
     @assert recipe.head == :->
 
-    out_target = out
     file_name = String(out) * ".jld2"
 
     tnames = []
@@ -134,17 +133,17 @@ macro target(out, recipe)
         end
     end
 
-    exists = isdefined(__module__, out_target)
+    exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)
     if exists
         xp = quote
-            if $recipe_hash != $(esc(out_target)).hash
-                $(esc(out_target)).deps = Target[$(tnames...)]
-                $(esc(out_target)).recipe = $(esc(recipe))
-                $(esc(out_target)).timestamp = 0.0
-                $(esc(out_target)).cache = nothing
-                $(esc(out_target)).hash = $recipe_hash
-                full_path = joinpath(DrWatson.datadir($(esc(out_target)).relpath), $file_name)
+            if $recipe_hash != $(esc(out)).hash
+                $(esc(out)).deps = Target[$(tnames...)]
+                $(esc(out)).recipe = $(esc(recipe))
+                $(esc(out)).timestamp = 0.0
+                $(esc(out)).cache = nothing
+                $(esc(out)).hash = $recipe_hash
+                full_path = joinpath(DrWatson.datadir($(esc(out)).relpath), $file_name)
                 isfile(full_path) && rm(full_path)
             end
         end
@@ -154,15 +153,91 @@ macro target(out, recipe)
         sn = splitext(basename(fn))[1]
         path = joinpath(rp, sn)
 
-        xp = :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)),
+        xp = :($(esc(out)) = Target($(QuoteNode(out)), $(esc(recipe)),
             Target[$(tnames...)], $recipe_hash, $path))
     end
     return xp
 end
 
+function sweep_expr(out, recipe)
 
-macro make(vname)
-    xp = :(make($(esc(vname))))
+    args = recipe.args[1]
+    kwds = args.args[1]
+    body = recipe.args[2]
+
+    @assert args.head == :tuple
+    @assert kwds.head == :parameters
+
+    parnames = []
+    rngnames = []
+    for i in eachindex(kwds.args)
+        kwds.args[i] isa Expr || continue
+        kwds.args[i].head == :call || continue
+        push!(parnames, kwds.args[i].args[2])
+        push!(rngnames, kwds.args[i].args[3])
+        kwds.args[i] = kwds.args[i].args[3]
+    end
+
+    kwds = [ Expr(:kw, p, r) for (p,r) in zip(parnames, rngnames)]
+    path = :(joinpath(DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
+
+    xp = :(
+        $args -> begin
+            function payload(; $(parnames...) )
+                $body
+            end
+            BakerStreet.runsims(payload, $path; $(kwds...))
+        end
+    )
+
+    return xp
+end
+
+
+macro sweep(out, recipe)
+    recipe = sweep_expr(out, recipe)
+    println(recipe)
+
+    @assert out isa Symbol
+    @assert recipe.head == :->
+
+    file_name = String(out) * ".jld2"
+
+    tnames = []
+    tp = recipe.args[1]
+    if tp isa Symbol
+        push!(tnames, esc(tp))
+    else
+        @assert tp.head == :tuple
+        for arg in tp.args
+            arg isa Symbol || continue
+            push!(tnames, esc(arg))
+        end
+    end
+
+    exists = isdefined(__module__, out)
+    recipe_hash = pihash(recipe)
+    if exists
+        xp = quote
+            if $recipe_hash != $(esc(out)).hash
+                $(esc(out)).deps = Target[$(tnames...)]
+                $(esc(out)).recipe = $(esc(recipe))
+                $(esc(out)).timestamp = 0.0
+                $(esc(out)).cache = nothing
+                $(esc(out)).hash = $recipe_hash
+                full_path = joinpath(DrWatson.datadir($(esc(out)).relpath), $file_name)
+                isfile(full_path) && rm(full_path)
+            end
+        end
+    else
+        fn = string(__source__.file)
+        rp = dirname(relpath(fn, projectdir()))
+        sn = splitext(basename(fn))[1]
+        path = joinpath(rp, sn)
+
+        xp = :($(esc(out)) = Target($(QuoteNode(out)), $(esc(recipe)),
+            Target[$(tnames...)], $recipe_hash, $path))
+    end
     return xp
 end
 

@@ -5,13 +5,13 @@ using Makeitso
 @target C (A,B)->A.+B
 @target D (A,B,C)->A.+B.+C
 
-x = (@make D)[end]
+x = make(D)[end]
 @assert x == 30
 
 @target B ()->pi
 println("--- Recipe for B modified! ---")
 
-x = (@make D)[end]
+x = make(D)[end]
 @assert x ≈ (20+2pi)
 
 
