@@ -1,5 +1,6 @@
 using Makeitso
 using BakerStreet
+
 using DataFrames
 
 @target data (;seeds) -> begin
@@ -7,13 +8,9 @@ using DataFrames
         println(seed)
         return (;sol=sqrt(seed + pi))
     end
-
-    println(seeds)
-    # @show @which runsims(payload, "solutions"; seed=seeds)
-    # runsims(payload, "solutions"; seed=seeds)
-    @runsims payload seed=seeds
+    runsims(payload, "bakerstreet/data.dir"; seed=seeds)
 end
 
-@target average12 (data,;seeds)->sum(data.sol)
+@target average (data,;seeds)->sum(data.sol)
 
-println(make(average12; seeds=collect(1:10)))
+println(make(average; seeds=collect(1:12)))

@@ -116,35 +116,20 @@ pihash(x::Any,h) = hash(x,h)
 
 macro target(out, recipe)
 
-    # @show out
-    # @show recipe
-
     @assert out isa Symbol
     @assert recipe.head == :->
-    
-    # modify recipe to accept kwargs
-    tp = recipe.args[1]
 
-    splitext(basename(string(__source__.file)))[1]
-    # out_target = Symbol("target_", out)
     out_target = out
     file_name = String(out) * ".jld2"
 
-    # vnames = [] # A, B, C
-    tnames = [] # target, target_B, target_C
-
-    # tp = recipe.args[1]
+    tnames = []
+    tp = recipe.args[1]
     if tp isa Symbol
-        # push!(vnames, tp)
-        # push!(tnames, esc(Symbol("target_", tp)))
         push!(tnames, esc(tp))
     else
-        # @show tp.head
         @assert tp.head == :tuple
         for arg in tp.args
             arg isa Symbol || continue
-            # push!(vnames, arg)
-            # push!(tnames, esc(Symbol("target_", arg)))
             push!(tnames, esc(arg))
         end
     end
@@ -161,16 +146,13 @@ macro target(out, recipe)
                 $(esc(out_target)).hash = $recipe_hash
                 full_path = joinpath(DrWatson.datadir($(esc(out_target)).relpath), $file_name)
                 isfile(full_path) && rm(full_path)
-                # isfile($file_name) && rm($file_name)
             end
         end
     else
-
         fn = string(__source__.file)
         rp = dirname(relpath(fn, projectdir()))
         sn = splitext(basename(fn))[1]
         path = joinpath(rp, sn)
-
 
         xp = :($(esc(out_target)) = Target($(QuoteNode(out)), $(esc(recipe)),
             Target[$(tnames...)], $recipe_hash, $path))
@@ -179,13 +161,8 @@ macro target(out, recipe)
 end
 
 
-macro make(vname, vars...)
-    # println(vars)
-    # expr = symdict_expr_from_vars(vars)
-    # println(expr)
-    # tname = Symbol("target_", vname)
-    tname = vname
-    xp = :(make($(esc(tname))))
+macro make(vname)
+    xp = :(make($(esc(vname))))
     return xp
 end
 
