@@ -1,14 +1,14 @@
 module Makeitso
 
 export @target
-export @make
+export @sweep
 export make
 
 using JLD2
 using FileIO
 using DrWatson
 using BakerStreet
-
+using DataFrames
 
 mutable struct Target
     deps::Vector{Target}
@@ -143,7 +143,7 @@ macro target(out, recipe)
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
-                full_path = joinpath(DrWatson.datadir($(esc(out)).relpath), $file_name)
+                full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
                 isfile(full_path) && rm(full_path)
             end
         end
@@ -179,14 +179,14 @@ function sweep_expr(out, recipe)
     end
 
     kwds = [ Expr(:kw, p, r) for (p,r) in zip(parnames, rngnames)]
-    path = :(joinpath(DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
+    path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
 
     xp = :(
         $args -> begin
             function payload(; $(parnames...) )
                 $body
             end
-            BakerStreet.runsims(payload, $path; $(kwds...))
+            Makeitso.BakerStreet.runsims(payload, $path; $(kwds...))
         end
     )
 
@@ -196,7 +196,6 @@ end
 
 macro sweep(out, recipe)
     recipe = sweep_expr(out, recipe)
-    println(recipe)
 
     @assert out isa Symbol
     @assert recipe.head == :->
@@ -225,7 +224,7 @@ macro sweep(out, recipe)
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
-                full_path = joinpath(DrWatson.datadir($(esc(out)).relpath), $file_name)
+                full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
                 isfile(full_path) && rm(full_path)
             end
         end
