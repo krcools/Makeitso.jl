@@ -1,14 +1,15 @@
 module Makeitso
 
-export @target
-export @sweep
-export make
-
 using JLD2
 using FileIO
 using DrWatson
 using BakerStreet
 using DataFrames
+
+export @target
+export @sweep
+export make
+export getrow
 
 mutable struct Target
     deps::Vector{Target}
