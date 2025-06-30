@@ -124,12 +124,12 @@ macro target(out, recipe)
 
     tnames = []
     tp = recipe.args[1]
-    if tp isa Symbol
+    if tp isa Symbol # special case for single argument
         push!(tnames, esc(tp))
     else
         @assert tp.head == :tuple
         for arg in tp.args
-            arg isa Symbol || continue
+            arg isa Symbol || continue # skips kwargs
             push!(tnames, esc(arg))
         end
     end
@@ -163,34 +163,52 @@ end
 function sweep_expr(out, recipe)
 
     args = recipe.args[1]
-    kwds = args.args[1]
+    kwdargs = args.args[1]
+    posargs = args.args[2:end]
     body = recipe.args[2]
 
     @assert args.head == :tuple
-    @assert kwds.head == :parameters
+    @assert kwdargs.head == :parameters
+
+    atomics = filter(a -> (a isa Symbol), posargs)
+    sweeps = filter(a -> !(a isa Symbol), posargs)
+
+    @show atomics
+    @show sweeps
+    @show kwdargs
 
     parnames = []
     rngnames = []
-    for i in eachindex(kwds.args)
-        kwds.args[i] isa Expr || continue
-        kwds.args[i].head == :call || continue
-        push!(parnames, kwds.args[i].args[2])
-        push!(rngnames, kwds.args[i].args[3])
-        kwds.args[i] = kwds.args[i].args[3]
+    for i in eachindex(kwdargs.args)
+        kwdargs.args[i] isa Expr || continue
+        kwdargs.args[i].head == :call || continue
+        push!(parnames, kwdargs.args[i].args[2])
+        push!(rngnames, kwdargs.args[i].args[3])
+        kwdargs.args[i] = kwdargs.args[i].args[3]
     end
 
-    kwds = [ Expr(:kw, p, r) for (p,r) in zip(parnames, rngnames)]
+    args = Expr(:tuple, kwdargs, atomics...)
+
+    plargs = [ Expr(:kw, p, r) for (p,r) in zip(parnames, rngnames)]
     path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
+
+    makes = Expr(:block, [
+        :( temp = make($(s.args[2]); $(parnames...) ) )
+    for s in sweeps]...)
 
     xp = :(
         $args -> begin
             function payload(; $(parnames...) )
+                $makes
                 $body
             end
-            Makeitso.BakerStreet.runsims(payload, $path; $(kwds...))
+            Makeitso.BakerStreet.runsims(payload, $path; $(plargs...))
         end
     )
 
+
+
+    @show xp
     return xp
 end
 
