@@ -8,9 +8,7 @@ end
 
 @sweep solutions (!ore, ;seed in seed) -> begin
     @show seed
-    # @show ore
-    # c = make(;seed=seed)
-    return (;sol = sqrt(temp))
+    return (;sol = sqrt(ore))
 end
 
 @target average (solutions,;seed) -> begin
@@ -19,9 +17,3 @@ end
 end
 
 make(average; seed=[1,2,3])
-
-
-# recipe = :( (A,!B;a, b in B, c) -> "solution" )
-# xp = Makeitso.sweep_expr(:solutions, recipe)
-
-# @show xp

@@ -1,7 +1,8 @@
 using Makeitso
 using DataFrames
 
-Makeitso.@sweep solutions (;seed in seeds) -> begin
+
+@sweep solutions (;seed in seeds) -> begin
     return (;sol= sqrt(seed + pi))
 end
 
@@ -11,3 +12,9 @@ end
 end
 
 make(average; seeds=[1,2,3])
+
+
+@macroexpand @target average (solutions,;seeds) -> begin
+    println(length(solutions.sol))
+    sum(solutions.sol)
+end

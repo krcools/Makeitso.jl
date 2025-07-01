@@ -173,10 +173,6 @@ function sweep_expr(out, recipe)
     atomics = filter(a -> (a isa Symbol), posargs)
     sweeps = filter(a -> !(a isa Symbol), posargs)
 
-    @show atomics
-    @show sweeps
-    @show kwdargs
-
     parnames = []
     rngnames = []
     for i in eachindex(kwdargs.args)
@@ -189,26 +185,24 @@ function sweep_expr(out, recipe)
 
     args = Expr(:tuple, kwdargs, atomics...)
 
-    plargs = [ Expr(:kw, p, r) for (p,r) in zip(parnames, rngnames)]
+    plargs = [ esc(Expr(:kw, p, r)) for (p,r) in zip(parnames, rngnames)]
     path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
 
     makes = Expr(:block, [
-        :( temp = make($(s.args[2]); $(parnames...) ) )
+        :( $(s.args[2]) = make($(esc(s.args[2])); $(parnames...) ) )
     for s in sweeps]...)
 
+    runsims = :(BakerStreet.runsims(payload, $(esc(path)); $(plargs...)))
     xp = :(
         $args -> begin
             function payload(; $(parnames...) )
                 $makes
                 $body
             end
-            Makeitso.BakerStreet.runsims(payload, $path; $(plargs...))
+            $((runsims))
         end
     )
 
-
-
-    @show xp
     return xp
 end
 
@@ -232,6 +226,7 @@ macro sweep(out, recipe)
             push!(tnames, esc(arg))
         end
     end
+    recipe.args[1] = esc(recipe.args[1])
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)
@@ -239,7 +234,7 @@ macro sweep(out, recipe)
         xp = quote
             if $recipe_hash != $(esc(out)).hash
                 $(esc(out)).deps = Target[$(tnames...)]
-                $(esc(out)).recipe = $(esc(recipe))
+                $(esc(out)).recipe = $((recipe))
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
@@ -253,9 +248,10 @@ macro sweep(out, recipe)
         sn = splitext(basename(fn))[1]
         path = joinpath(rp, sn)
 
-        xp = :($(esc(out)) = Target($(QuoteNode(out)), $(esc(recipe)),
+        xp = :($(esc(out)) = Target($(QuoteNode(out)), $((recipe)),
             Target[$(tnames...)], $recipe_hash, $path))
     end
+
     return xp
 end
 
