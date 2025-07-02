@@ -183,13 +183,25 @@ function sweep_expr(out, recipe)
         kwdargs.args[i] = kwdargs.args[i].args[3]
     end
 
+    cfgnames = setdiff(kwdargs.args, rngnames)
+
+    @show kwdargs.args
+    @show parnames
+    @show rngnames
+    @show cfgnames
+
     args = Expr(:tuple, kwdargs, atomics...)
 
-    plargs = [ esc(Expr(:kw, p, r)) for (p,r) in zip(parnames, rngnames)]
+    plargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(parnames, rngnames)]
+    mkargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(cfgnames, cfgnames)]
     path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
 
+    # makes = Expr(:block, [
+    #     :( $(s.args[2]) = make($(esc(s.args[2])); $(parnames...) ) )
+    # for s in sweeps]...)
+
     makes = Expr(:block, [
-        :( $(s.args[2]) = make($(esc(s.args[2])); $(parnames...) ) )
+        :( $(s.args[2]) = make($(esc(s.args[2])); $(parnames...), $(mkargs...) ) )
     for s in sweeps]...)
 
     runsims = :(BakerStreet.runsims(payload, $(esc(path)); $(plargs...)))
@@ -197,7 +209,7 @@ function sweep_expr(out, recipe)
         $args -> begin
             function payload(; $(parnames...) )
                 $makes
-                $body
+                $((body))
             end
             $((runsims))
         end
@@ -238,7 +250,7 @@ macro sweep(out, recipe)
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
-                full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
+                full_path = joinpath(BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
                 isfile(full_path) && rm(full_path)
             end
         end
