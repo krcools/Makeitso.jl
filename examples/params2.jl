@@ -13,3 +13,4 @@ end
     (;sol=sqrt(B))
 end
 
+make(C; hs=[1,2,3])

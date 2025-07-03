@@ -5,6 +5,7 @@ using FileIO
 using DrWatson
 using BakerStreet
 using DataFrames
+using MacroTools
 
 export @target
 export @sweep
@@ -172,6 +173,7 @@ function sweep_expr(out, recipe)
 
     atomics = filter(a -> (a isa Symbol), posargs)
     sweeps = filter(a -> !(a isa Symbol), posargs)
+    sweeps = [s.args[2] for s in sweeps]
 
     parnames = []
     rngnames = []
@@ -185,10 +187,12 @@ function sweep_expr(out, recipe)
 
     cfgnames = setdiff(kwdargs.args, rngnames)
 
-    @show kwdargs.args
-    @show parnames
-    @show rngnames
-    @show cfgnames
+    # @show kwdargs.args
+    # @show parnames
+    # @show rngnames
+    # @show cfgnames
+    # @show atomics
+    # @show sweeps
 
     args = Expr(:tuple, kwdargs, atomics...)
 
@@ -200,16 +204,24 @@ function sweep_expr(out, recipe)
     #     :( $(s.args[2]) = make($(esc(s.args[2])); $(parnames...) ) )
     # for s in sweeps]...)
 
+    gensyms = [Base.gensym(s) for s in  sweeps]
     makes = Expr(:block, [
-        :( $(s.args[2]) = make($(esc(s.args[2])); $(parnames...), $(mkargs...) ) )
-    for s in sweeps]...)
+        :( $(esc(g)) = make($(esc(s)); $(parnames...), $(mkargs...) ) )
+    for (s,g) in zip(sweeps, gensyms)]...)
+
+    body = MacroTools.postwalk(body) do x
+        i = findfirst(==(x), sweeps)
+        i !== nothing ? gensyms[i] : x
+    end
+
+    # @show body
 
     runsims = :(BakerStreet.runsims(payload, $(esc(path)); $(plargs...)))
     xp = :(
         $args -> begin
             function payload(; $(parnames...) )
                 $makes
-                $((body))
+                $(esc(body))
             end
             $((runsims))
         end
@@ -266,5 +278,22 @@ macro sweep(out, recipe)
 
     return xp
 end
+
+
+"""
+Recursively escapes all symbols in `ex` except for the given `excluded` symbols.
+"""
+function escape_except(ex, excluded)
+    if ex in excluded
+        return ex  # leave this symbol unescaped
+    elseif isa(ex, Symbol)
+        return esc(ex)
+    elseif isa(ex, Expr)
+        return Expr(ex.head, map(arg -> escape_except(arg, excluded), ex.args)...)
+    else
+        return ex  # literals like numbers, strings, etc.
+    end
+end
+
 
 end # module
