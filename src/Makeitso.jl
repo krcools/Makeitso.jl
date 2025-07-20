@@ -14,7 +14,7 @@ export getrow
 
 
 mutable struct Target
-    deps::Vector{Target}
+    deps
     recipe
     timestamp
     cache
@@ -43,7 +43,7 @@ end
 
 include("utils.jl")
 
-function Target(name, recipe, deps::Vector{Target}, hash, simname)
+function Target(name, recipe, deps, hash, simname)
     t = Target(deps, recipe, 0.0, nothing, name, hash, simname, nothing)
 end
 
@@ -279,7 +279,7 @@ macro target(out, recipe)
     if exists
         xp = quote
             if $recipe_hash != $(esc(out)).hash
-                $(esc(out)).deps = Target[$(tnames...)]
+                $(esc(out)).deps = [$(tnames...)]
                 $(esc(out)).recipe = $(esc(recipe))
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
@@ -295,118 +295,118 @@ macro target(out, recipe)
         path = joinpath(rp, sn) # "examples/sweep"
 
         xp = :($(esc(out)) = Target($(String(out)), $(esc(recipe)),
-            Target[$(tnames...)], $recipe_hash, $path))
+            [$(tnames...)], $recipe_hash, $path))
     end
     return xp
 end
 
-function sweep_expr(out, recipe)
+# function sweep_expr(out, recipe)
 
-    args = recipe.args[1]
-    kwdargs = args.args[1]
-    posargs = args.args[2:end]
-    body = recipe.args[2]
+#     args = recipe.args[1]
+#     kwdargs = args.args[1]
+#     posargs = args.args[2:end]
+#     body = recipe.args[2]
 
-    @assert args.head == :tuple
-    @assert kwdargs.head == :parameters
+#     @assert args.head == :tuple
+#     @assert kwdargs.head == :parameters
 
-    atomics = filter(a -> (a isa Symbol), posargs)
-    sweeps = filter(a -> !(a isa Symbol), posargs)
-    sweeps = [s.args[2] for s in sweeps]
+#     atomics = filter(a -> (a isa Symbol), posargs)
+#     sweeps = filter(a -> !(a isa Symbol), posargs)
+#     sweeps = [s.args[2] for s in sweeps]
 
-    parnames = []
-    rngnames = []
-    for i in eachindex(kwdargs.args)
-        kwdargs.args[i] isa Expr || continue
-        kwdargs.args[i].head == :call || continue
-        push!(parnames, kwdargs.args[i].args[2])
-        push!(rngnames, kwdargs.args[i].args[3])
-        kwdargs.args[i] = kwdargs.args[i].args[3]
-    end
+#     parnames = []
+#     rngnames = []
+#     for i in eachindex(kwdargs.args)
+#         kwdargs.args[i] isa Expr || continue
+#         kwdargs.args[i].head == :call || continue
+#         push!(parnames, kwdargs.args[i].args[2])
+#         push!(rngnames, kwdargs.args[i].args[3])
+#         kwdargs.args[i] = kwdargs.args[i].args[3]
+#     end
 
-    cfgnames = setdiff(kwdargs.args, rngnames)
+#     cfgnames = setdiff(kwdargs.args, rngnames)
 
-    args = Expr(:tuple, kwdargs, atomics...)
+#     args = Expr(:tuple, kwdargs, atomics...)
 
-    plargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(parnames, rngnames)]
-    mkargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(cfgnames, cfgnames)]
-    path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
+#     plargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(parnames, rngnames)]
+#     mkargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(cfgnames, cfgnames)]
+#     path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
 
-    gensyms = [Base.gensym(s) for s in  sweeps]
-    makes = Expr(:block, [
-        :( $(esc(g)) = make($(esc(s)); $(parnames...), $(mkargs...) ) )
-    for (s,g) in zip(sweeps, gensyms)]...)
+#     gensyms = [Base.gensym(s) for s in  sweeps]
+#     makes = Expr(:block, [
+#         :( $(esc(g)) = make($(esc(s)); $(parnames...), $(mkargs...) ) )
+#     for (s,g) in zip(sweeps, gensyms)]...)
 
-    body = MacroTools.postwalk(body) do x
-        i = findfirst(==(x), sweeps)
-        i !== nothing ? gensyms[i] : x
-    end
+#     body = MacroTools.postwalk(body) do x
+#         i = findfirst(==(x), sweeps)
+#         i !== nothing ? gensyms[i] : x
+#     end
 
-    runsims = :(BakerStreet.runsims(payload, $(esc(path)); $(plargs...)))
-    xp = :(
-        $args -> begin
-            function payload(; $(parnames...) )
-                $makes
-                $(esc(body))
-            end
-            $((runsims))
-        end
-    )
+#     runsims = :(BakerStreet.runsims(payload, $(esc(path)); $(plargs...)))
+#     xp = :(
+#         $args -> begin
+#             function payload(; $(parnames...) )
+#                 $makes
+#                 $(esc(body))
+#             end
+#             $((runsims))
+#         end
+#     )
 
-    return xp
-end
+#     return xp
+# end
+
+
+# macro sweep(out, recipe)
+#     recipe = sweep_expr(out, recipe)
+
+#     @assert out isa Symbol
+#     @assert recipe.head == :->
+
+#     file_name = String(out) * ".jld2"
+
+#     tnames = []
+#     tp = recipe.args[1]
+#     if tp isa Symbol
+#         push!(tnames, esc(tp))
+#     else
+#         @assert tp.head == :tuple
+#         for arg in tp.args
+#             arg isa Symbol || continue
+#             push!(tnames, esc(arg))
+#         end
+#     end
+#     recipe.args[1] = esc(recipe.args[1])
+
+#     exists = isdefined(__module__, out)
+#     recipe_hash = pihash(recipe)
+#     if exists
+#         xp = quote
+#             if $recipe_hash != $(esc(out)).hash
+#                 $(esc(out)).recipe = $((recipe))
+#                 $(esc(out)).deps = Target[$(tnames...)]
+#                 $(esc(out)).hash = $recipe_hash
+#                 full_path = joinpath(BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
+#                 $(esc(out)).timestamp = 0.0
+#                 $(esc(out)).cache = nothing
+#                 isfile(full_path) && rm(full_path)
+#             end
+#         end
+#     else
+#         fn = string(__source__.file)
+#         rp = dirname(relpath(fn, projectdir()))
+#         sn = splitext(basename(fn))[1]
+#         path = joinpath(rp, sn)
+
+#         xp = :($(esc(out)) = Target($(String(out)), $((recipe)),
+#             Target[$(tnames...)], $recipe_hash, $path))
+#     end
+
+#     return xp
+# end
 
 
 macro sweep(out, recipe)
-    recipe = sweep_expr(out, recipe)
-
-    @assert out isa Symbol
-    @assert recipe.head == :->
-
-    file_name = String(out) * ".jld2"
-
-    tnames = []
-    tp = recipe.args[1]
-    if tp isa Symbol
-        push!(tnames, esc(tp))
-    else
-        @assert tp.head == :tuple
-        for arg in tp.args
-            arg isa Symbol || continue
-            push!(tnames, esc(arg))
-        end
-    end
-    recipe.args[1] = esc(recipe.args[1])
-
-    exists = isdefined(__module__, out)
-    recipe_hash = pihash(recipe)
-    if exists
-        xp = quote
-            if $recipe_hash != $(esc(out)).hash
-                $(esc(out)).recipe = $((recipe))
-                $(esc(out)).deps = Target[$(tnames...)]
-                $(esc(out)).hash = $recipe_hash
-                full_path = joinpath(BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
-                $(esc(out)).timestamp = 0.0
-                $(esc(out)).cache = nothing
-                isfile(full_path) && rm(full_path)
-            end
-        end
-    else
-        fn = string(__source__.file)
-        rp = dirname(relpath(fn, projectdir()))
-        sn = splitext(basename(fn))[1]
-        path = joinpath(rp, sn)
-
-        xp = :($(esc(out)) = Target($(String(out)), $((recipe)),
-            Target[$(tnames...)], $recipe_hash, $path))
-    end
-
-    return xp
-end
-
-
-macro sweep2(out, recipe)
 
     @assert out isa Symbol
     @assert recipe.head == :->

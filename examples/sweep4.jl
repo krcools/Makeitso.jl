@@ -20,7 +20,7 @@ end
     return y
 end
 
-@sweep2 solutions (base, !ore, ;seed = seeds, p) -> begin
+@sweep solutions (base, !ore, ;seed = seeds, p) -> begin
     @show seed
     return (;sol = Mod.square_root(ore))
 end

@@ -8,9 +8,9 @@ end
     A * 2
 end
 
-@sweep C (!B, ;h in hs) -> begin
+@sweep C (!B, ;h = H) -> begin
     @show h
     (;sol=sqrt(B))
 end
 
-make(C; hs=[1,2,3])
+make(C; h=[1,2,3])
