@@ -28,11 +28,13 @@ end
     sum(solutions.sol)
 end
 
+@target base () -> 10
+
 df = make(solutions; seeds=[1,2,3], p=π)
 x = make(average; seeds=[1,2,3], p=π)
 @assert x ≈ 5.146264369941973
 
-Base.remove_linenums!(@macroexpand @sweep solutions (!ore, ;seed in seeds, p) -> begin
+Base.remove_linenums!(@macroexpand @sweep solutions (base, !ore, ;seed in seeds, p) -> begin
     @show seed
-    return (;sol = Mod.square_root(ore))
+    return (;sol = base + Mod.square_root(ore))
 end)

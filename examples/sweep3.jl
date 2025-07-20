@@ -6,9 +6,9 @@ using DataFrames
     return seeds .+ 1
 end
 
-@sweep solutions (ore, ;seed in seeds) -> begin
-    @show seed
-    return (;sol = sqrt(ore))
+@target solutions (ore, ;seeds) -> begin
+    @show seeds
+    return (;sol = sqrt.(ore))
 end
 
 @target average (solutions,;seeds) -> begin
@@ -17,3 +17,4 @@ end
 end
 
 make(average; seeds=[1,2,3])
+make(average; seeds=[6,5,4])
