@@ -45,17 +45,17 @@ end
 
 function iteration_cache_uptodate(sweep; kwargs...)
     if sweep.iteration_cache == nothing
-        @info "Sweep $(sweep.name) iteration at $(kwargs) cache not available."
+        @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) cache not available."
         return false
     end
     if sweep.iteration_timestamp < reduce(max, getfield.(vcat(sweep.shared_deps, sweep.iteration_deps), :timestamp), init=0.0)
-        @info "Sweep $(sweep.name) iteration at $(kwargs) cache is out-of-date."
+        @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) cache is out-of-date."
         return false
     end
     if sweep.iteration_parameters != Dict(kwargs)
         # @show sweep.iteration_parameters
         # @show Dict(kwargs)
-        @info "Makeitso.jl: Sweep $(sweep.name) iteration at $(kwargs) parameters have changed."
+        @info "Makeitso.jl: Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) parameters have changed."
         return false
     end
     @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) is up-to-date."
