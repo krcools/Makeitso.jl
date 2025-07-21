@@ -39,3 +39,5 @@ Base.remove_linenums!(@macroexpand @sweep solutions (base, !ore, ;seed = seeds, 
     @show seed
     return (;sol = base + Mod.square_root(ore))
 end)
+
+nothing

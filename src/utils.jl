@@ -58,7 +58,7 @@ function iteration_cache_uptodate(sweep; kwargs...)
         @info "Makeitso.jl: Sweep $(sweep.name) iteration at $(kwargs) parameters have changed."
         return false
     end
-    @info "Sweep $(sweep.name) iteration at $(kwargs) is up-to-date."
+    @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) is up-to-date."
     return true
 end
 

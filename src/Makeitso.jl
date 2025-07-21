@@ -53,9 +53,7 @@ function make(target, level=0; kwargs...)
         make(t, level+1; kwargs...)
     end
 
-    # fullpath = joinpath(DrWatson.datadir(target.relpath), String(target.name) * ".jld2")
     fullpath = target_fullpath(target, kwargs)
-    # @info "Look for backup of $(target.name) in $fullpath"
 
     # No file means this is the first run ever
     if !isfile(fullpath)
@@ -69,7 +67,7 @@ function make(target, level=0; kwargs...)
     deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
     if target.cache == nothing
         d = load(fullpath)
-        @info "target loaded from location: $fullpath"
+        @info "target loaded from location: $(relpath(fullpath, projectdir())))"
         if d["hash"] != target.hash
             update!(target; kwargs...)
             @info "level $level dep $(target.name) on disk but recomputed from deps [recipe modified]."
@@ -142,7 +140,7 @@ function make(sweep::Sweep, level=0; kwargs...)
         path = iteration_fullpath(sweep, variables)
         if isfile(path)
             d = load(path)
-            @info "Sweep $(sweep.name) iteration at $(variables) loaded from: $path"
+            @info "Sweep $(sweep.name) iteration at $(NamedTuple(variables)) loaded from: $(relpath(path, projectdir()))"
             if d["hash"] == sweep.hash && d["params"] == merge(parameters, variables)
                 sweep.iteration_cache      = d
                 sweep.iteration_timestamp  = d["timestamp"]
@@ -157,11 +155,11 @@ function make(sweep::Sweep, level=0; kwargs...)
         push!(sweep.iteration_timestamps, sweep.iteration_timestamp)
     end
 
-    if sweep.cache == nothing
+    if sweep.cache == nothing # this likely needs to become sweep.cache == nothing || sweep.parameters != parameters
         path = target_fullpath(sweep, parameters)
         if isfile(path)
             d = load(path)
-            @info "Sweep $(sweep.name) at $(parameters) loaded from: $path"
+            @info "Sweep $(sweep.name) at $(NamedTuple(parameters)) loaded from: $(relpath(path, projectdir()))"
             if d["hash"] == sweep.hash && d["params"] == parameters
                 sweep.cache      = d["cache"]
                 sweep.timestamp  = d["timestamp"]
