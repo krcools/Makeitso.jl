@@ -267,10 +267,15 @@ macro target(out, recipe)
     else
         @assert tp.head == :tuple
         for arg in tp.args
-            arg isa Symbol || continue # skips kwargs
+            arg isa Symbol || continue # skips keyword arguments
             push!(tnames, esc(arg))
         end
     end
+
+    # add kwargs... to the argument list to suppress
+    # errors related to unsupported keyword arguments
+    # TODO: better, more robust fix needed
+    tp = add_kwargs_to_args!(tp)
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)

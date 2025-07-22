@@ -25,15 +25,15 @@ end
     return (;sol = Mod.square_root(ore))
 end
 
-# @target average (solutions,;seeds, p) -> begin
-#     println(length(solutions.sol))
-#     sum(solutions.sol)
-# end
+@target average (solutions,;seeds, p) -> begin
+    println(length(solutions.sol))
+    sum(solutions.sol)
+end
 
 
 
 
-# x = make(average; seeds=[1,2,3], p=π)
+x = make(average; seed=[1,2,3], p=3.14)
 # @assert x ≈ 5.146264369941973
 
 # Base.remove_linenums!(@macroexpand @sweep2 solutions (base, !ore, ;seed = seeds, p) -> begin
@@ -41,4 +41,4 @@ end
 #     return (;sol = base + Mod.square_root(ore))
 # end)
 
-df = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
+# df = make(solutions; seed=[1.0,2.0,3.0], p=3.14)

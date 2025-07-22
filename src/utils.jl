@@ -113,3 +113,25 @@ function cleancacherecursive(target::Target)
         cleancacherecursive(dep)
     end
 end
+
+
+function add_kwargs_to_args!(tp)
+    if tp isa Symbol
+        # Only positional, add kwargs... as a new parameters section
+        tp = Expr(:tuple, tp, Expr(:parameters, Expr(:..., :kwargs)))
+    elseif tp.head == :tuple
+        # Look for :parameters section
+        found = false
+        for arg in tp.args
+            if arg isa Expr && arg.head == :parameters
+                push!(arg.args, Expr(:..., :kwargs))
+                found = true
+            end
+        end
+        # If no :parameters, add one
+        if !found
+            push!(tp.args, Expr(:parameters, Expr(:..., :kwargs)))
+        end
+    end
+    return tp
+end
