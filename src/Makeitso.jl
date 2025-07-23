@@ -56,6 +56,8 @@ function make(target, level=0; kwargs...)
     fullpath = target_fullpath(target, kwargs)
 
     # No file means this is the first run ever
+    # @show fullpath
+    # @show isfile(fullpath)
     if !isfile(fullpath)
         @info "No backup found for $(target.name)."
         update!(target; kwargs...)
@@ -65,15 +67,16 @@ function make(target, level=0; kwargs...)
 
     # Target was made in previous session. Is it up-to-date?
     deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
-    if target.cache == nothing
+    # @show NamedTuple(kwargs)
+    # @show target.params
+    # @show kwargs != target.params
+    if target.cache == nothing || (kwargs != target.params)
         d = load(fullpath)
         @info "target loaded from location: $(relpath(fullpath, projectdir())))"
         if d["hash"] != target.hash
             update!(target; kwargs...)
             @info "level $level dep $(target.name) on disk but recomputed from deps [recipe modified]."
         elseif d["params"] != kwargs
-            # @show target.params
-            # @show kwargs
             update!(target; kwargs...)
             @info "level $level dep $(target.name) on disk but recomputed from deps [parameters modified]."
         elseif d["timestamp"] < deps_stamp
@@ -238,6 +241,8 @@ function update!(target::Target; kwargs...)
     # filename = (joinpath(dirname, varname * ".jld2"))
     # mkpath(dirname)
 
+    # @show kwargs
+
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
     target.timestamp = time()
@@ -272,9 +277,7 @@ macro target(out, recipe)
         end
     end
 
-    # add kwargs... to the argument list to suppress
-    # errors related to unsupported keyword arguments
-    # TODO: better, more robust fix needed
+    # add kwargs... to the argument list
     tp = add_kwargs_to_args!(tp)
 
     exists = isdefined(__module__, out)
@@ -287,7 +290,9 @@ macro target(out, recipe)
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
-                full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
+                # full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
+                full_path = Makeitso.target_fullpath($(esc(out)), $(esc(out)).params)
+                # println("Recipe modified: deleting backup at: $(full_path)")
                 isfile(full_path) && rm(full_path)
             end
         end
@@ -303,111 +308,6 @@ macro target(out, recipe)
     return xp
 end
 
-# function sweep_expr(out, recipe)
-
-#     args = recipe.args[1]
-#     kwdargs = args.args[1]
-#     posargs = args.args[2:end]
-#     body = recipe.args[2]
-
-#     @assert args.head == :tuple
-#     @assert kwdargs.head == :parameters
-
-#     atomics = filter(a -> (a isa Symbol), posargs)
-#     sweeps = filter(a -> !(a isa Symbol), posargs)
-#     sweeps = [s.args[2] for s in sweeps]
-
-#     parnames = []
-#     rngnames = []
-#     for i in eachindex(kwdargs.args)
-#         kwdargs.args[i] isa Expr || continue
-#         kwdargs.args[i].head == :call || continue
-#         push!(parnames, kwdargs.args[i].args[2])
-#         push!(rngnames, kwdargs.args[i].args[3])
-#         kwdargs.args[i] = kwdargs.args[i].args[3]
-#     end
-
-#     cfgnames = setdiff(kwdargs.args, rngnames)
-
-#     args = Expr(:tuple, kwdargs, atomics...)
-
-#     plargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(parnames, rngnames)]
-#     mkargs = [esc(Expr(:kw, p, r)) for (p,r) in zip(cfgnames, cfgnames)]
-#     path = :(joinpath(Makeitso.BakerStreet.DrWatson.datadir($(out).relpath), $(String(out) * ".dir")))
-
-#     gensyms = [Base.gensym(s) for s in  sweeps]
-#     makes = Expr(:block, [
-#         :( $(esc(g)) = make($(esc(s)); $(parnames...), $(mkargs...) ) )
-#     for (s,g) in zip(sweeps, gensyms)]...)
-
-#     body = MacroTools.postwalk(body) do x
-#         i = findfirst(==(x), sweeps)
-#         i !== nothing ? gensyms[i] : x
-#     end
-
-#     runsims = :(BakerStreet.runsims(payload, $(esc(path)); $(plargs...)))
-#     xp = :(
-#         $args -> begin
-#             function payload(; $(parnames...) )
-#                 $makes
-#                 $(esc(body))
-#             end
-#             $((runsims))
-#         end
-#     )
-
-#     return xp
-# end
-
-
-# macro sweep(out, recipe)
-#     recipe = sweep_expr(out, recipe)
-
-#     @assert out isa Symbol
-#     @assert recipe.head == :->
-
-#     file_name = String(out) * ".jld2"
-
-#     tnames = []
-#     tp = recipe.args[1]
-#     if tp isa Symbol
-#         push!(tnames, esc(tp))
-#     else
-#         @assert tp.head == :tuple
-#         for arg in tp.args
-#             arg isa Symbol || continue
-#             push!(tnames, esc(arg))
-#         end
-#     end
-#     recipe.args[1] = esc(recipe.args[1])
-
-#     exists = isdefined(__module__, out)
-#     recipe_hash = pihash(recipe)
-#     if exists
-#         xp = quote
-#             if $recipe_hash != $(esc(out)).hash
-#                 $(esc(out)).recipe = $((recipe))
-#                 $(esc(out)).deps = Target[$(tnames...)]
-#                 $(esc(out)).hash = $recipe_hash
-#                 full_path = joinpath(BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
-#                 $(esc(out)).timestamp = 0.0
-#                 $(esc(out)).cache = nothing
-#                 isfile(full_path) && rm(full_path)
-#             end
-#         end
-#     else
-#         fn = string(__source__.file)
-#         rp = dirname(relpath(fn, projectdir()))
-#         sn = splitext(basename(fn))[1]
-#         path = joinpath(rp, sn)
-
-#         xp = :($(esc(out)) = Target($(String(out)), $((recipe)),
-#             Target[$(tnames...)], $recipe_hash, $path))
-#     end
-
-#     return xp
-# end
-
 
 macro sweep(out, recipe)
 
@@ -420,7 +320,8 @@ macro sweep(out, recipe)
     iteration_deps = []
     variable_keys = []
 
-    # process the dependency specification
+    # process the dependency specification: sort out parameters and variables,
+    # shared deps and iteration deps
     args = recipe.args[1]
     @assert args.head == :tuple
 
@@ -443,22 +344,8 @@ macro sweep(out, recipe)
         end
     end
 
-    # @show args
-    # @show shared_deps
-    # @show iteration_deps
-    # @show variable_keys
-
-
-    # tp = recipe.args[1]
-    # if tp isa Symbol # special case for single argument
-    #     push!(shared_deps, esc(tp))
-    # else
-    #     @assert tp.head == :tuple
-    #     for arg in tp.args
-    #         arg isa Symbol || continue # skips kwargs
-    #         push!(shared_deps, esc(arg))
-    #     end
-    # end
+    # add kwargs... to the argument list
+    args = add_kwargs_to_args!(args)
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)

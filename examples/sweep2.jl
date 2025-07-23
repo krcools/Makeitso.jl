@@ -1,3 +1,5 @@
+# test macro hyiene and breadth first build
+
 using Makeitso
 using DataFrames
 
@@ -12,8 +14,8 @@ module Mod
 end
 
 @target ore (;seed, p) -> begin
-    @show seed
-    @show p
+    # @show seed
+    # @show p
     y= Mod.f(seed)
     return y
 end

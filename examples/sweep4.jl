@@ -1,3 +1,5 @@
+# test the combination of shared and iteration dependencies
+
 using Makeitso
 using DataFrames
 
@@ -20,12 +22,12 @@ end
     return y
 end
 
-@sweep solutions (base, !ore, ;seed = seeds, p) -> begin
+@sweep solutions (base, !ore, ;seed = seed, p) -> begin
     @show seed
     return (;sol = Mod.square_root(ore))
 end
 
-@target average (solutions,;seeds, p) -> begin
+@target average (solutions,;seed, p) -> begin
     println(length(solutions.sol))
     sum(solutions.sol)
 end
@@ -33,7 +35,7 @@ end
 
 
 
-x = make(average; seed=[1,2,3], p=3.14)
+x = make(average; seed=[1.0,2.0,3.0], p=3.14)
 # @assert x ≈ 5.146264369941973
 
 # Base.remove_linenums!(@macroexpand @sweep2 solutions (base, !ore, ;seed = seeds, p) -> begin

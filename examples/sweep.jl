@@ -18,3 +18,7 @@ Base.remove_linenums!(@macroexpand @target average (solutions,;seed) -> begin
     println(length(solutions.sol))
     sum(solutions.sol)
 end)
+
+nothing
+
+# Improvement: first check if the sweep is up-to-date before loading all deps from disk

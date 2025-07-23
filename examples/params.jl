@@ -3,7 +3,7 @@ module HelloKW
 using Makeitso
 
 @target A (;h) -> begin
-    println(h)
+    # println(h)
     return 1:10
 end
 

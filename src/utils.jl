@@ -1,9 +1,41 @@
-function fn_pars_hash(config)
+function target_hash(target::Target, h)
+    for d in target.deps
+        h = target_hash(d, h)
+    end
+    h = hash(target.hash, h)
+    return h
+end
+
+
+function target_hash(target::Sweep, h)
+    for d in target.shared_deps
+        h = target_hash(d, h)
+    end
+    for d in target.iteration_deps
+        h = target_hash(d, h)
+    end
+    h = hash(target.hash, h)
+    return h
+end
+
+
+function fn_pars_hash(target, config)
     bn = DrWatson.savename(config)
     hs = hash(config)
-    fn = string(bn, ".", hs)
+    hs = target_hash(target, hs)
+
+    fn = bn == "" ? string(hs) : string(bn, ".", hs)
     return fn
 end
+
+# function fn_pars_hash(sweep::Sweep, config)
+#     bn = DrWatson.savename(config)
+#     hs = hash(config)
+#     hs = target_hash(sweep, hs)
+
+#     fn = bn == "" ? string(hs) : string(bn, ".", hs)
+#     return fn
+# end
 
 
 # Position independent hashing of expressions
@@ -24,7 +56,7 @@ function target_dirname(target)
 end
 
 function target_fullpath(target, parameters)
-    return joinpath(target_dirname(target), target.name * "." * fn_pars_hash(parameters) * ".jld2")
+    return joinpath(target_dirname(target), target.name * "." * fn_pars_hash(target, parameters) * ".jld2")
 end
 
 function sweep_dirname(sweep)
@@ -40,7 +72,7 @@ function iteration_dirname(sweep)
 end
 
 function iteration_fullpath(sweep, variables_dict)
-    joinpath(iteration_dirname(sweep), fn_pars_hash(variables_dict) * ".jld2")
+    joinpath(iteration_dirname(sweep), fn_pars_hash(sweep, variables_dict) * ".jld2")
 end
 
 function iteration_cache_uptodate(sweep; kwargs...)
@@ -86,8 +118,8 @@ function loadsims(dirname, configs=nothing)
     df = DrWatson.collect_results(datadir(dirname))
     configs == nothing && return df
 
-    # @show df
-    # @show configs
+    @show df
+    @show configs
 
     df = filter!(df) do row
         # @show row
@@ -130,7 +162,7 @@ function add_kwargs_to_args!(tp)
         end
         # If no :parameters, add one
         if !found
-            push!(tp.args, Expr(:parameters, Expr(:..., :kwargs)))
+            pushfirst!(tp.args, Expr(:parameters, Expr(:..., :kwargs)))
         end
     end
     return tp

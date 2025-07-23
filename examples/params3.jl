@@ -16,3 +16,6 @@ end
 end
 
 make(C; h=12)
+make(C; h=13)
+
+# TODO: filename hash for A does not need to depend on h
