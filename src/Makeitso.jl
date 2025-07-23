@@ -55,17 +55,18 @@ function make(target, level=0; kwargs...)
         make(t, level+1; kwargs...)
     end
 
-    if target.cache == nothing || (kwargs != target.params) # or hash cannot be computed from dependencies
-        @info "target $(target.name) at $(NamedTuple(kwargs)): not cached in memory."
+    if target.cache == nothing || (kwargs != target.params) || (target_hash(target) != target.tree_hash)
+        @info "target $(target.name) at $(NamedTuple(kwargs)): cache not valid."
         path = target_fullpath(target, kwargs)
         # @show path
         if isfile(path)
             d = load(path)
             @info "target $(target.name) at $(NamedTuple(kwargs)): backup found and read."
-            if d["hash"] == target.hash && d["params"] == kwargs
+            if d["hash"] == target.hash && d["params"] == kwargs && d["tree_hash"] == target_hash(target)
                 target.cache      = d[target.name]
                 target.timestamp  = d["timestamp"]
                 target.params     = d["params"]
+                target.tree_hash  = d["tree_hash"]
             else
                 @info "target $(target.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
             end
@@ -260,23 +261,18 @@ function update!(target::Target; kwargs...)
 
     fullpath = target_fullpath(target, kwargs)
     mkpath(dirname(fullpath))
-    # varname = String(target.name)
-
-    # dirname = DrWatson.datadir(target.relpath)
-    # filename = (joinpath(dirname, varname * ".jld2"))
-    # mkpath(dirname)
-
-    # @show kwargs
 
     @info "!!! target $(target.name) at $(NamedTuple(kwargs)): computing from deps."
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
     target.timestamp = time()
+    target.tree_hash = target_hash(target, hash(nothing))
     save(fullpath, Dict(
         target.name => target.cache,
         "timestamp" => target.timestamp,
         "hash" => target.hash,
-        "params" => target.params))
+        "params" => target.params,
+        "tree_hash" => target.tree_hash))
 end
 
 
@@ -320,7 +316,7 @@ macro target(out, recipe)
                 # full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
                 full_path = Makeitso.target_fullpath($(esc(out)), $(esc(out)).params)
                 # println("Recipe modified: deleting backup at: $(full_path)")
-                isfile(full_path) && rm(full_path)
+                # isfile(full_path) && rm(full_path)
             end
         end
     else

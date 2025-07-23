@@ -1,4 +1,4 @@
-function target_hash(target::Target, h)
+function target_hash(target::Target, h=hash(nothing))
     for d in target.deps
         h = target_hash(d, h)
     end
@@ -7,7 +7,7 @@ function target_hash(target::Target, h)
 end
 
 
-function target_hash(target::Sweep, h)
+function target_hash(target::Sweep, h=hash(nothing))
     for d in target.shared_deps
         h = target_hash(d, h)
     end
@@ -85,8 +85,6 @@ function iteration_cache_uptodate(sweep; kwargs...)
         return false
     end
     if sweep.iteration_parameters != Dict(kwargs)
-        # @show sweep.iteration_parameters
-        # @show Dict(kwargs)
         @info "Makeitso.jl: Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) parameters have changed."
         return false
     end
@@ -96,17 +94,21 @@ end
 
 function cache_uptodate(sweep::Sweep; parameters)
     if sweep.cache == nothing
-        @info "Sweep $(sweep.name) at $(parameters) not cached in memory."
+        @info "Sweep $(sweep.name) at $(parameters): not cached in memory."
         return false
     end
     if sweep.timestamp < reduce(max, sweep.iteration_timestamps, init=0.0)
         # @show sweep.timestamp
         # @show sweep.iteration_timestamps
-        @info "Sweep $(sweep.name) cache is out-of-date."
+        @info "Sweep $(sweep.name) at $(parameters): cache is out-of-date."
         return false
     end
     if sweep.parameters != parameters
-        @info "Sweep $(sweep.name) parameters have changed."
+        @info "Sweep $(sweep.name) at $(parameters): parameters have changed."
+        return false
+    end
+    if sweep.tree_hash != target_hash(sweep)
+        @info "Sweep $(sweep.name) at $(parameters): tree hash has changed."
         return false
     end
     return true
@@ -118,8 +120,6 @@ function cache_uptodate(sweep::Target; parameters)
         return false
     end
     if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
-        # @show sweep.timestamp
-        # @show sweep.iteration_timestamps
         @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
         return false
     end
