@@ -155,7 +155,7 @@ function make(sweep::Sweep, level=0; kwargs...)
     sweep.iteration_timestamps = []
     for variables in variables_list
 
-        # remove the copy in memory
+        # cache is definitely invalid since based on previous iteration variables
         sweep.iteration_cache = nothing
         for  dep in sweep.iteration_deps
             cleancacherecursive(dep)
@@ -170,10 +170,14 @@ function make(sweep::Sweep, level=0; kwargs...)
         if isfile(path)
             d = load(path)
             @info "Sweep $(sweep.name) iteration at $(NamedTuple(variables)) loaded from: $(relpath(path, projectdir()))"
-            if d["hash"] == sweep.hash && d["params"] == merge(parameters, variables)
+            if d["hash"] == sweep.hash &&
+               d["params"] == merge(parameters, variables) &&
+               d["tree_hash"] == sweep.tree_hash
+
                 sweep.iteration_cache      = d
                 sweep.iteration_timestamp  = d["timestamp"]
                 sweep.iteration_parameters = d["params"]
+                sweep.tree_hash            = d["tree_hash"]
             end
         end
 
@@ -211,6 +215,7 @@ function sweep_update!(sweep, variables_list, parameters)
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
+    @info "!!! sweep $(sweep.name) at $(parameters) / $(variables_list): computing from deps."
     df = loadsims(iteration_dirname(sweep), variables_list)
     select!(df, Not([:timestamp, :hash, :path, :params]))
 
@@ -233,13 +238,14 @@ function iteration_update!(sweep, variables, parameters)
     shared_deps_vals = [t.cache for t in sweep.shared_deps]
     iteration_deps_vals = [t.cache for t in sweep.iteration_deps]
 
-    @info "Computing sweep $(sweep.name) iteration at $(variables)"
+    @info "!!! iteration $(sweep.name) at $(variables): computing from deps."
     sweep.iteration_cache = sweep.recipe(
         shared_deps_vals...,
         iteration_deps_vals...,
         ; variables..., parameters...)
     sweep.iteration_timestamp = time()
     sweep.iteration_parameters = merge(variables, parameters)
+    sweep.tree_hash = target_hash(sweep, hash(nothing))
 
     dct = merge(
         sweep.iteration_cache,
@@ -247,6 +253,7 @@ function iteration_update!(sweep, variables, parameters)
             timestamp=sweep.iteration_timestamp,
             hash=sweep.hash,
             params=sweep.iteration_parameters,
+            tree_hash=sweep.tree_hash,
         ),
         (;sweep.iteration_parameters...),
     )

@@ -11,7 +11,7 @@ end
     sum(solutions.sol)
 end
 
-a = make(average; seed=[1,2,3])
+a = make(average; seed=[1.0,2.0,3.0])
 
 
 Base.remove_linenums!(@macroexpand @target average (solutions,;seed) -> begin

@@ -88,6 +88,10 @@ function iteration_cache_uptodate(sweep; kwargs...)
         @info "Makeitso.jl: Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) parameters have changed."
         return false
     end
+    if sweep.tree_hash != target_hash(sweep)
+        @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): tree hash has changed."
+        return false
+    end
     @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) is up-to-date."
     return true
 end
@@ -98,8 +102,6 @@ function cache_uptodate(sweep::Sweep; parameters)
         return false
     end
     if sweep.timestamp < reduce(max, sweep.iteration_timestamps, init=0.0)
-        # @show sweep.timestamp
-        # @show sweep.iteration_timestamps
         @info "Sweep $(sweep.name) at $(parameters): cache is out-of-date."
         return false
     end
@@ -111,6 +113,7 @@ function cache_uptodate(sweep::Sweep; parameters)
         @info "Sweep $(sweep.name) at $(parameters): tree hash has changed."
         return false
     end
+    @info "sweep $(sweep.name) at $(NamedTuple(parameters)): cache is up-to-date."
     return true
 end
 
@@ -120,11 +123,17 @@ function cache_uptodate(sweep::Target; parameters)
         return false
     end
     if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
+        @show sweep.timestamp
+        @show reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
         @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
         return false
     end
     if sweep.params != parameters
         @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache parameters incorrect."
+        return false
+    end
+    if sweep.tree_hash != target_hash(sweep)
+        @info "target $(sweep.name) at $(parameters): tree hash has changed."
         return false
     end
     @info "target $(sweep.name) at $(NamedTuple(parameters)): cache is up-to-date."
@@ -137,8 +146,8 @@ function loadsims(dirname, configs=nothing)
     df = DrWatson.collect_results(datadir(dirname))
     configs == nothing && return df
 
-    @show df
-    @show configs
+    # @show df
+    # @show configs
 
     df = filter!(df) do row
         # @show row
