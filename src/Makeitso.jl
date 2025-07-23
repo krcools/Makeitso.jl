@@ -22,6 +22,7 @@ mutable struct Target
     hash
     relpath
     params
+    tree_hash
 end
 
 mutable struct Sweep
@@ -39,6 +40,7 @@ mutable struct Sweep
     iteration_timestamp
     iteration_parameters
     iteration_timestamps
+    tree_hash
 end
 
 include("utils.jl")
@@ -53,59 +55,82 @@ function make(target, level=0; kwargs...)
         make(t, level+1; kwargs...)
     end
 
-    fullpath = target_fullpath(target, kwargs)
-
-    # No file means this is the first run ever
-    # @show fullpath
-    # @show isfile(fullpath)
-    if !isfile(fullpath)
-        @info "No backup found for $(target.name)."
-        update!(target; kwargs...)
-        @info "level $level dep $(target.name): computed from dependencies [initial computation]."
-        return target.cache
-    end
-
-    # Target was made in previous session. Is it up-to-date?
-    deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
-    # @show NamedTuple(kwargs)
-    # @show target.params
-    # @show kwargs != target.params
-    if target.cache == nothing || (kwargs != target.params)
-        d = load(fullpath)
-        @info "target loaded from location: $(relpath(fullpath, projectdir())))"
-        if d["hash"] != target.hash
-            update!(target; kwargs...)
-            @info "level $level dep $(target.name) on disk but recomputed from deps [recipe modified]."
-        elseif d["params"] != kwargs
-            update!(target; kwargs...)
-            @info "level $level dep $(target.name) on disk but recomputed from deps [parameters modified]."
-        elseif d["timestamp"] < deps_stamp
-            update!(target; kwargs...)
-            @info "level $level dep $(target.name) on disk but recomputed from deps [out-of-date]."
+    if target.cache == nothing || (kwargs != target.params) # or hash cannot be computed from dependencies
+        @info "target $(target.name) at $(NamedTuple(kwargs)): not cached in memory."
+        path = target_fullpath(target, kwargs)
+        # @show path
+        if isfile(path)
+            d = load(path)
+            @info "target $(target.name) at $(NamedTuple(kwargs)): backup found and read."
+            if d["hash"] == target.hash && d["params"] == kwargs
+                target.cache      = d[target.name]
+                target.timestamp  = d["timestamp"]
+                target.params     = d["params"]
+            else
+                @info "target $(target.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
+            end
         else
-            target.timestamp = d["timestamp"]
-            target.cache = d[String(target.name)]
-            target.params = d["params"]
-            @info "level $level dep $(target.name): restored from disk."
+            @info "target $(target.name) at $(NamedTuple(kwargs)): no backup found."
         end
-        return target.cache
     end
 
-    # Target was computed in this session. Is it up-to-date?
-    if target.timestamp < deps_stamp
+    if !cache_uptodate(target; parameters=kwargs)
         update!(target; kwargs...)
-        @info "level $level dep $(target.name) in memory but recomputed from deps [out-of-date]."
-        return target.cache
-    elseif target.params != kwargs
-        # @show target.params
-        # @show kwargs
-        update!(target; kwargs...)
-        @info "level $level dep $(target.name) in memory but recomputed from deps [parameters modified]."
-        return target.cache
-    else
-        @info "level $level dep $(target.name): retrieved from memory."
-        return target.cache
     end
+
+    return target.cache
+
+    # # No file means this is the first run ever
+    # # @show fullpath
+    # # @show isfile(fullpath)
+    # if !isfile(fullpath)
+    #     @info "No backup found for $(target.name)."
+    #     update!(target; kwargs...)
+    #     @info "level $level dep $(target.name): computed from dependencies [initial computation]."
+    #     return target.cache
+    # end
+
+    # # Target was made in previous session. Is it up-to-date?
+    # deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
+    # # @show NamedTuple(kwargs)
+    # # @show target.params
+    # # @show kwargs != target.params
+    # if target.cache == nothing || (kwargs != target.params)
+    #     d = load(fullpath)
+    #     @info "target loaded from location: $(relpath(fullpath, projectdir())))"
+    #     if d["hash"] != target.hash
+    #         update!(target; kwargs...)
+    #         @info "level $level dep $(target.name) on disk but recomputed from deps [recipe modified]."
+    #     elseif d["params"] != kwargs
+    #         update!(target; kwargs...)
+    #         @info "level $level dep $(target.name) on disk but recomputed from deps [parameters modified]."
+    #     elseif d["timestamp"] < deps_stamp
+    #         update!(target; kwargs...)
+    #         @info "level $level dep $(target.name) on disk but recomputed from deps [out-of-date]."
+    #     else
+    #         target.timestamp = d["timestamp"]
+    #         target.cache = d[String(target.name)]
+    #         target.params = d["params"]
+    #         @info "level $level dep $(target.name): restored from disk."
+    #     end
+    #     return target.cache
+    # end
+
+    # # Target was computed in this session. Is it up-to-date?
+    # if target.timestamp < deps_stamp
+    #     update!(target; kwargs...)
+    #     @info "level $level dep $(target.name) in memory but recomputed from deps [out-of-date]."
+    #     return target.cache
+    # elseif target.params != kwargs
+    #     # @show target.params
+    #     # @show kwargs
+    #     update!(target; kwargs...)
+    #     @info "level $level dep $(target.name) in memory but recomputed from deps [parameters modified]."
+    #     return target.cache
+    # else
+    #     @info "level $level dep $(target.name): retrieved from memory."
+    #     return target.cache
+    # end
 end
 
 
@@ -243,6 +268,7 @@ function update!(target::Target; kwargs...)
 
     # @show kwargs
 
+    @info "!!! target $(target.name) at $(NamedTuple(kwargs)): computing from deps."
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
     target.timestamp = time()
@@ -290,6 +316,7 @@ macro target(out, recipe)
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
+                $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
                 # full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
                 full_path = Makeitso.target_fullpath($(esc(out)), $(esc(out)).params)
                 # println("Recipe modified: deleting backup at: $(full_path)")
@@ -302,8 +329,19 @@ macro target(out, recipe)
         sn = splitext(basename(fn))[1]
         path = joinpath(rp, sn) # "examples/sweep"
 
-        xp = :($(esc(out)) = Target($(String(out)), $(esc(recipe)),
-            [$(tnames...)], $recipe_hash, $path))
+        xp = quote
+            $(esc(out)) = Target(
+                [$(tnames...)],
+                $(esc(recipe)),
+                0.0,
+                nothing,
+                $(String(out)),
+                $recipe_hash,
+                $path,
+                nothing,
+                zero(UInt64),)
+            $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
+        end
     end
     return xp
 end
@@ -364,6 +402,7 @@ macro sweep(out, recipe)
                 $(esc(out)).iteration_timestamp = 0.0
                 $(esc(out)).iteration_parameters = nothing
                 $(esc(out)).iteration_timestamps = []
+                $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)) , hash(nothing))
                 full_path = Makeitso.sweep_fullpath($(esc(out)))
                 isfile(full_path) && rm(full_path)
             end
@@ -374,7 +413,7 @@ macro sweep(out, recipe)
         sn = splitext(basename(fn))[1]
         rp = joinpath(rp, sn) # "examples/sweep"
 
-        xp = :(
+        xp = quote
             $(esc(out)) = Sweep(
                 $(String(out)),
                 $rp,
@@ -389,9 +428,11 @@ macro sweep(out, recipe)
                 nothing,
                 0.0,
                 nothing,
-                []
+                [],
+                zero(Int64),
             )
-        )
+            $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
+        end
     end
     return xp
 end

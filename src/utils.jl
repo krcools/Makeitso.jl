@@ -94,9 +94,9 @@ function iteration_cache_uptodate(sweep; kwargs...)
     return true
 end
 
-function cache_uptodate(sweep; parameters)
+function cache_uptodate(sweep::Sweep; parameters)
     if sweep.cache == nothing
-        @info "Sweep $(sweep.name) at $(parameters)not cached in memory."
+        @info "Sweep $(sweep.name) at $(parameters) not cached in memory."
         return false
     end
     if sweep.timestamp < reduce(max, sweep.iteration_timestamps, init=0.0)
@@ -109,6 +109,25 @@ function cache_uptodate(sweep; parameters)
         @info "Sweep $(sweep.name) parameters have changed."
         return false
     end
+    return true
+end
+
+function cache_uptodate(sweep::Target; parameters)
+    if sweep.cache == nothing
+        @info "target $(sweep.name) at $(NamedTuple(parameters)): cache empty."
+        return false
+    end
+    if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
+        # @show sweep.timestamp
+        # @show sweep.iteration_timestamps
+        @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
+        return false
+    end
+    if sweep.params != parameters
+        @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache parameters incorrect."
+        return false
+    end
+    @info "target $(sweep.name) at $(NamedTuple(parameters)): cache is up-to-date."
     return true
 end
 
