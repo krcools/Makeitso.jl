@@ -106,6 +106,8 @@ function cache_uptodate(sweep::Sweep; parameters)
         return false
     end
     if sweep.parameters != parameters
+        # @show sweep.parameters
+        # @show parameters
         @info "Sweep $(sweep.name) at $(parameters): parameters have changed."
         return false
     end

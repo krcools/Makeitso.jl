@@ -55,14 +55,20 @@ function make(target, level=0; kwargs...)
         make(t, level+1; kwargs...)
     end
 
-    if target.cache == nothing || (kwargs != target.params) || (target_hash(target) != target.tree_hash)
+    if (target.cache == nothing) ||
+       (kwargs != target.params) ||
+       (target_hash(target) != target.tree_hash)
+
         @info "target $(target.name) at $(NamedTuple(kwargs)): cache not valid."
         path = target_fullpath(target, kwargs)
         # @show path
         if isfile(path)
             d = load(path)
             @info "target $(target.name) at $(NamedTuple(kwargs)): backup found and read."
-            if d["hash"] == target.hash && d["params"] == kwargs && d["tree_hash"] == target_hash(target)
+            if d["hash"]      == target.hash &&
+               d["params"]    == kwargs &&
+               d["tree_hash"] == target_hash(target)
+
                 target.cache      = d[target.name]
                 target.timestamp  = d["timestamp"]
                 target.params     = d["params"]
@@ -169,7 +175,7 @@ function make(sweep::Sweep, level=0; kwargs...)
         path = iteration_fullpath(sweep, variables)
         if isfile(path)
             d = load(path)
-            @info "Sweep $(sweep.name) iteration at $(NamedTuple(variables)) loaded from: $(relpath(path, projectdir()))"
+            @info "iteration $(sweep.name) at $(NamedTuple(variables)): loaded from $(relpath(path, projectdir()))"
             if d["hash"] == sweep.hash &&
                d["params"] == merge(parameters, variables) &&
                d["tree_hash"] == sweep.tree_hash
@@ -188,21 +194,36 @@ function make(sweep::Sweep, level=0; kwargs...)
         push!(sweep.iteration_timestamps, sweep.iteration_timestamp)
     end
 
-    if sweep.cache == nothing # this likely needs to become sweep.cache == nothing || sweep.parameters != parameters
-        path = target_fullpath(sweep, parameters)
+    if (sweep.cache == nothing) ||
+       (sweep.parameters != kwargs) ||
+       (sweep.tree_hash != target_hash(sweep))
+
+        @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): cache not valid."
+        path = target_fullpath(sweep, kwargs)
         if isfile(path)
             d = load(path)
-            @info "Sweep $(sweep.name) at $(NamedTuple(parameters)) loaded from: $(relpath(path, projectdir()))"
-            if d["hash"] == sweep.hash && d["params"] == parameters
+            # @show d["hash"] sweep.hash
+            # @show d["params"] kwargs
+            # @show d["tree_hash"] sweep.tree_hash
+
+            # @show d["hash"] == sweep.hash
+            # @show d["params"] == kwargs
+            # @show d["tree_hash"] == sweep.tree_hash
+            @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
+            if (d["hash"]      == sweep.hash) &&
+               (d["params"]    == kwargs)     &&
+               (d["tree_hash"] == sweep.tree_hash)
+
                 sweep.cache      = d["cache"]
                 sweep.timestamp  = d["timestamp"]
                 sweep.parameters = d["params"]
+                sweep.tree_hash  = d["tree_hash"]
             end
         end
     end
 
-    if !cache_uptodate(sweep; parameters)
-        sweep_update!(sweep, variables_list, parameters)
+    if !cache_uptodate(sweep; parameters=kwargs)
+        sweep_update!(sweep, variables_list, kwargs)
     end
 
     return sweep.cache
@@ -215,19 +236,21 @@ function sweep_update!(sweep, variables_list, parameters)
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
-    @info "!!! sweep $(sweep.name) at $(parameters) / $(variables_list): computing from deps."
+    @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
     df = loadsims(iteration_dirname(sweep), variables_list)
     select!(df, Not([:timestamp, :hash, :path, :params]))
 
     sweep.cache = df
     sweep.timestamp = time()
     sweep.parameters = parameters
+    sweep.tree_hash = target_hash(sweep, hash(nothing))
 
     save(fullpath, Dict(
         "cache" => sweep.cache,
         "timestamp" => sweep.timestamp,
-        "hash" => hash,
-        "params" => sweep.parameters))
+        "hash" => sweep.hash,
+        "params" => sweep.parameters,
+        "tree_hash" => sweep.tree_hash))
 end
 
 function iteration_update!(sweep, variables, parameters)
