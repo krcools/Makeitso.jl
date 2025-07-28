@@ -56,6 +56,9 @@ function target_dirname(target)
 end
 
 function target_fullpath(target, parameters)
+    # @show parameters
+    # parameters = filter(p -> p.first in target.parameter_keys, parameters)
+    # @show parameters
     return joinpath(target_dirname(target), target.name * "." * fn_pars_hash(target, parameters) * ".jld2")
 end
 
@@ -196,4 +199,26 @@ function add_kwargs_to_args!(tp)
         end
     end
     return tp
+end
+
+
+function append_deps_parameter_keys!(target::Target, parameter_keys)
+    for dep in target.deps
+        append!(parameter_keys, dep.parameter_keys)
+    end
+    unique!(parameter_keys)
+    # @show parameter_keys
+    return parameter_keys
+end
+
+function append_deps_parameter_keys!(target::Sweep, parameter_keys)
+    for dep in target.shared_deps
+        append!(parameter_keys, dep.parameter_keys)
+    end
+    for dep in target.iteration_deps
+        append!(parameter_keys, dep.parameter_keys)
+    end
+    unique!(parameter_keys)
+    # @show parameter_keys
+    return parameter_keys
 end

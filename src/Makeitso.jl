@@ -23,6 +23,7 @@ mutable struct Target
     relpath
     params
     tree_hash
+    parameter_keys
 end
 
 mutable struct Sweep
@@ -41,6 +42,7 @@ mutable struct Sweep
     iteration_parameters
     iteration_timestamps
     tree_hash
+    parameter_keys
 end
 
 include("utils.jl")
@@ -50,6 +52,9 @@ function Target(name, recipe, deps, hash, simname)
 end
 
 function make(target, level=0; kwargs...)
+
+    kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
+    # @show target.name kwargs
 
     for t in target.deps
         make(t, level+1; kwargs...)
@@ -143,6 +148,9 @@ end
 
 
 function make(sweep::Sweep, level=0; kwargs...)
+
+    kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
+    # @show sweep.name kwargs
 
     parameters = Dict(
         (k,v) for (k,v) in kwargs if !(k in sweep.variable_keys)
@@ -318,19 +326,61 @@ macro target(out, recipe)
     file_name = String(out) * ".jld2"
 
     tnames = []
+    parameter_keys = []
+
+    # treat the special case of a single argument
+    if recipe.args[1] isa Symbol
+        recipe.args[1] = Expr(:tuple, recipe.args[1])
+    end
+
     tp = recipe.args[1]
-    if tp isa Symbol # special case for single argument
-        push!(tnames, esc(tp))
-    else
-        @assert tp.head == :tuple
-        for arg in tp.args
-            arg isa Symbol || continue # skips keyword arguments
+    # if tp isa Symbol # special case for single argument
+    #     push!(tnames, esc(tp))
+    # else
+    @assert tp.head == :tuple
+    for arg in tp.args
+        # arg isa Symbol || continue # skips keyword arguments
+        if arg isa Symbol
             push!(tnames, esc(arg))
+        elseif arg isa Expr && arg.head == :parameters
+                for p in arg.args
+                    if p isa Symbol
+                        push!(parameter_keys, p)
+                    else
+                        error("Unexpected parameter in target definition: $p")
+                    end
+                end
+        else
+            error("Unexpected argument in target definition: $arg")
         end
     end
 
     # add kwargs... to the argument list
     tp = add_kwargs_to_args!(tp)
+
+    # move into the retunred expression
+    # @show parameter_keys
+
+    # args = recipe.args[1]
+    # @assert args.head == :tuple
+    # for (i,arg) in pairs(args.args)
+    #     if arg isa Expr && arg.head == :parameters
+    #         for (j,p) in pairs(arg.args)
+    #             if p isa Expr && p.head == :kw
+    #                 push!(variable_keys, QuoteNode(p.args[1]))
+    #                 arg.args[j] = p.args[1]
+    #             end
+    #         end
+    #     elseif arg isa Expr && arg.head == :call
+    #         @assert arg.args[1] == :!
+    #         push!(iteration_deps, esc(arg.args[2]))
+    #         args.args[i] = arg.args[2]
+    #     elseif arg isa Symbol
+    #         push!(shared_deps, esc(arg))
+    #     else
+    #         error("Unexpected recipe argument: $arg")
+    #     end
+    # end
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)
@@ -342,11 +392,10 @@ macro target(out, recipe)
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
                 $(esc(out)).hash = $recipe_hash
-                $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
-                # full_path = joinpath(Makeitso.BakerStreet.DrWatson.datadir($(esc(out)).relpath), $file_name)
-                full_path = Makeitso.target_fullpath($(esc(out)), $(esc(out)).params)
-                # println("Recipe modified: deleting backup at: $(full_path)")
-                # isfile(full_path) && rm(full_path)
+                $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
+                $(esc(out)).parameter_keys = $(parameter_keys)
+                append_deps_parameter_keys!($(esc(out)), $(parameter_keys))
+                # full_path = target_fullpath($(esc(out)), $(esc(out)).params)
             end
         end
     else
@@ -365,8 +414,13 @@ macro target(out, recipe)
                 $recipe_hash,
                 $path,
                 nothing,
-                zero(UInt64),)
-            $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
+                zero(UInt64),
+                $(parameter_keys),
+                )
+            # println("creation [before]: ", $(esc(out).parameter_keys))
+            append_deps_parameter_keys!($(esc(out)), $(esc(out)).parameter_keys)
+            # println("creation [after]: ", $(esc(out).parameter_keys))
+            $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
         end
     end
     return xp
@@ -383,6 +437,7 @@ macro sweep(out, recipe)
     shared_deps = []
     iteration_deps = []
     variable_keys = []
+    parameter_keys = []
 
     # process the dependency specification: sort out parameters and variables,
     # shared deps and iteration deps
@@ -395,6 +450,10 @@ macro sweep(out, recipe)
                 if p isa Expr && p.head == :kw
                     push!(variable_keys, QuoteNode(p.args[1]))
                     arg.args[j] = p.args[1]
+                elseif p isa Symbol
+                    push!(parameter_keys, p)
+                else
+                    error("Unexpected parameter in sweep definition: $p")
                 end
             end
         elseif arg isa Expr && arg.head == :call
@@ -429,6 +488,8 @@ macro sweep(out, recipe)
                 $(esc(out)).iteration_parameters = nothing
                 $(esc(out)).iteration_timestamps = []
                 $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)) , hash(nothing))
+                $(esc(out)).parameter_keys = $(parameter_keys)
+                append_deps_parameter_keys!($(esc(out)), $(parameter_keys))
                 full_path = Makeitso.sweep_fullpath($(esc(out)))
                 isfile(full_path) && rm(full_path)
             end
@@ -456,7 +517,9 @@ macro sweep(out, recipe)
                 nothing,
                 [],
                 zero(Int64),
+                $(parameter_keys),
             )
+            append_deps_parameter_keys!($(esc(out)), $(esc(out)).parameter_keys)
             $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
         end
     end
