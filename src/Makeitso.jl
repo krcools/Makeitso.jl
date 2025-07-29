@@ -69,7 +69,7 @@ function make(target, level=0; kwargs...)
         # @show path
         if isfile(path)
             d = load(path)
-            @info "target $(target.name) at $(NamedTuple(kwargs)): backup found and read."
+            @info "target $(target.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
             if d["hash"]      == target.hash &&
                d["params"]    == kwargs &&
                d["tree_hash"] == target_hash(target)
@@ -180,7 +180,7 @@ function make(sweep::Sweep, level=0; kwargs...)
         end
 
         # Try to load a backup from disk
-        path = iteration_fullpath(sweep, variables)
+        path = iteration_fullpath(sweep, variables, parameters)
         if isfile(path)
             d = load(path)
             @info "iteration $(sweep.name) at $(NamedTuple(variables)): loaded from $(relpath(path, projectdir()))"
@@ -231,21 +231,21 @@ function make(sweep::Sweep, level=0; kwargs...)
     end
 
     if !cache_uptodate(sweep; parameters=kwargs)
-        sweep_update!(sweep, variables_list, kwargs)
+        sweep_update!(sweep, variables_list, kwargs, parameters)
     end
 
     return sweep.cache
 end
 
 
-function sweep_update!(sweep, variables_list, parameters)
+function sweep_update!(sweep, variables_list, parameters, nonvariables)
 
     fullpath = target_fullpath(sweep, parameters)
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
     @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
-    df = loadsims(iteration_dirname(sweep), variables_list)
+    df = loadsims(iteration_dirname(sweep, nonvariables), variables_list)
     select!(df, Not([:timestamp, :hash, :path, :params]))
 
     sweep.cache = df
@@ -263,7 +263,7 @@ end
 
 function iteration_update!(sweep, variables, parameters)
 
-    fullpath = iteration_fullpath(sweep, variables)
+    fullpath = iteration_fullpath(sweep, variables, parameters)
     mkpath(dirname(fullpath))
 
     shared_deps_vals = [t.cache for t in sweep.shared_deps]
@@ -477,7 +477,7 @@ macro sweep(out, recipe)
             if $recipe_hash != $(esc(out)).hash
                 $(esc(out)).shared_deps = [$(shared_deps...)]
                 $(esc(out)).iteration_deps = [$(iteration_deps...)]
-                $(esc(out)).variables_keys = [$(variable_keys...)]
+                $(esc(out)).variable_keys = [$(variable_keys...)]
                 $(esc(out)).recipe = $(esc(recipe))
                 $(esc(out)).hash = $recipe_hash
                 $(esc(out)).cache = nothing

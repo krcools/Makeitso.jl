@@ -12,6 +12,7 @@ end
 end
 
 a = make(average; seed=[1.0,2.0,3.0])
+b = make(average; seed=[3.0, 4.0])
 
 
 Base.remove_linenums!(@macroexpand @target average (solutions,;seed) -> begin

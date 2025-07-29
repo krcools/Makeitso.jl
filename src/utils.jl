@@ -70,32 +70,34 @@ function sweep_fullpath(sweep)
     return joinpath(sweep_dirname(sweep), String(sweep.name) * ".jld2")
 end
 
-function iteration_dirname(sweep)
-    return joinpath(DrWatson.datadir(sweep.relpath), String(sweep.name) * ".dir")
+function iteration_dirname(sweep, parameters)
+    # @show parameters
+    # @show fn_pars_hash(sweep, parameters)
+    return joinpath(DrWatson.datadir(sweep.relpath), sweep.name * "." * fn_pars_hash(sweep, parameters) * ".dir")
 end
 
-function iteration_fullpath(sweep, variables_dict)
-    joinpath(iteration_dirname(sweep), fn_pars_hash(sweep, variables_dict) * ".jld2")
+function iteration_fullpath(sweep, variables_dict, parameters_dict)
+    joinpath(iteration_dirname(sweep, parameters_dict), fn_pars_hash(sweep, variables_dict) * ".jld2")
 end
 
 function iteration_cache_uptodate(sweep; kwargs...)
     if sweep.iteration_cache == nothing
-        @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) cache not available."
+        @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache not available."
         return false
     end
     if sweep.iteration_timestamp < reduce(max, getfield.(vcat(sweep.shared_deps, sweep.iteration_deps), :timestamp), init=0.0)
-        @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) cache is out-of-date."
+        @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache is out-of-date."
         return false
     end
     if sweep.iteration_parameters != Dict(kwargs)
-        @info "Makeitso.jl: Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) parameters have changed."
+        @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): parameters have changed."
         return false
     end
     if sweep.tree_hash != target_hash(sweep)
-        @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): tree hash has changed."
+        @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): tree hash has changed."
         return false
     end
-    @info "Sweep $(sweep.name) iteration at $(NamedTuple(kwargs)) is up-to-date."
+    @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): up-to-date."
     return true
 end
 
@@ -128,8 +130,8 @@ function cache_uptodate(sweep::Target; parameters)
         return false
     end
     if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
-        @show sweep.timestamp
-        @show reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
+        # @show sweep.timestamp
+        # @show reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
         @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
         return false
     end
