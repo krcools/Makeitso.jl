@@ -74,45 +74,45 @@ function make(target::Target, level=0; kwargs...)
     return target.cache
 end
 
-function make2(target, level=0; kwargs...)
+# function make2(target, level=0; kwargs...)
 
-    kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
+#     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
 
-    for t in target.deps
-        make(t, level+1; kwargs...)
-    end
+#     for t in target.deps
+#         make(t, level+1; kwargs...)
+#     end
 
-    if (target.cache == nothing) ||
-       (kwargs != target.params) ||
-       (target_hash(target) != target.tree_hash)
+#     if (target.cache == nothing) ||
+#        (kwargs != target.params) ||
+#        (target_hash(target) != target.tree_hash)
 
-        @info "target $(target.name) at $(NamedTuple(kwargs)): cache not valid."
-        path = target_fullpath(target, kwargs)
-        if isfile(path)
-            d = load(path)
-            @info "target $(target.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
-            if d["hash"]      == target.hash &&
-               d["params"]    == kwargs &&
-               d["tree_hash"] == target_hash(target)
+#         @info "target $(target.name) at $(NamedTuple(kwargs)): cache not valid."
+#         path = target_fullpath(target, kwargs)
+#         if isfile(path)
+#             d = load(path)
+#             @info "target $(target.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
+#             if d["hash"]      == target.hash &&
+#                d["params"]    == kwargs &&
+#                d["tree_hash"] == target_hash(target)
 
-                target.cache      = d[target.name]
-                target.timestamp  = d["timestamp"]
-                target.params     = d["params"]
-                target.tree_hash  = d["tree_hash"]
-            else
-                @info "target $(target.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
-            end
-        else
-            @info "target $(target.name) at $(NamedTuple(kwargs)): no backup found."
-        end
-    end
+#                 target.cache      = d[target.name]
+#                 target.timestamp  = d["timestamp"]
+#                 target.params     = d["params"]
+#                 target.tree_hash  = d["tree_hash"]
+#             else
+#                 @info "target $(target.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
+#             end
+#         else
+#             @info "target $(target.name) at $(NamedTuple(kwargs)): no backup found."
+#         end
+#     end
 
-    if !cache_uptodate(target; parameters=kwargs)
-        update!(target; kwargs...)
-    end
+#     if !cache_uptodate(target; parameters=kwargs)
+#         update!(target; kwargs...)
+#     end
 
-    return target.cache
-end
+#     return target.cache
+# end
 
 
 function make(sweep::Sweep, level=0; kwargs...)
@@ -147,85 +147,85 @@ function make(sweep::Sweep, level=0; kwargs...)
     return sweep.cache
 end
 
-function make2(sweep::Sweep, level=0; kwargs...)
+# function make2(sweep::Sweep, level=0; kwargs...)
 
-    kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
+#     kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
 
-    parameters = Dict(
-        (k,v) for (k,v) in kwargs if !(k in sweep.variable_keys)
-    )
+#     parameters = Dict(
+#         (k,v) for (k,v) in kwargs if !(k in sweep.variable_keys)
+#     )
 
-    for t in sweep.shared_deps
-        make(t, level+1; parameters...)
-    end
+#     for t in sweep.shared_deps
+#         make(t, level+1; parameters...)
+#     end
 
-    variables_list = DrWatson.dict_list(
-        Dict((s, kwargs[s]) for s in sweep.variable_keys)
-    )
+#     variables_list = DrWatson.dict_list(
+#         Dict((s, kwargs[s]) for s in sweep.variable_keys)
+#     )
 
-    sweep.iteration_timestamps = []
-    for variables in variables_list
+#     sweep.iteration_timestamps = []
+#     for variables in variables_list
 
-        # cache is definitely invalid since based on previous iteration variables
-        sweep.iteration_cache = nothing
-        for  dep in sweep.iteration_deps
-            cleancacherecursive(dep)
-        end
+#         # cache is definitely invalid since based on previous iteration variables
+#         sweep.iteration_cache = nothing
+#         for  dep in sweep.iteration_deps
+#             cleancacherecursive(dep)
+#         end
 
-        for t in sweep.iteration_deps
-            make(t, level+1; parameters..., variables...)
-        end
+#         for t in sweep.iteration_deps
+#             make(t, level+1; parameters..., variables...)
+#         end
 
-        # Try to load a backup from disk
-        path = iteration_fullpath(sweep, variables, parameters)
-        if isfile(path)
-            d = load(path)
-            @info "iteration $(sweep.name) at $(NamedTuple(variables)): loaded from $(relpath(path, projectdir()))"
-            if d["hash"] == sweep.hash &&
-               d["params"] == merge(parameters, variables) &&
-               d["tree_hash"] == sweep.tree_hash
+#         # Try to load a backup from disk
+#         path = iteration_fullpath(sweep, variables, parameters)
+#         if isfile(path)
+#             d = load(path)
+#             @info "iteration $(sweep.name) at $(NamedTuple(variables)): loaded from $(relpath(path, projectdir()))"
+#             if d["hash"] == sweep.hash &&
+#                d["params"] == merge(parameters, variables) &&
+#                d["tree_hash"] == sweep.tree_hash
 
-                sweep.iteration_cache      = d
-                sweep.iteration_timestamp  = d["timestamp"]
-                sweep.iteration_parameters = d["params"]
-                sweep.tree_hash            = d["tree_hash"]
-            end
-        end
+#                 sweep.iteration_cache      = d
+#                 sweep.iteration_timestamp  = d["timestamp"]
+#                 sweep.iteration_parameters = d["params"]
+#                 sweep.tree_hash            = d["tree_hash"]
+#             end
+#         end
 
-        if !iteration_cache_uptodate(sweep; parameters..., variables...)
-            iteration_update!(sweep, variables, parameters)
-        end
+#         if !iteration_cache_uptodate(sweep; parameters..., variables...)
+#             iteration_update!(sweep, variables, parameters)
+#         end
 
-        push!(sweep.iteration_timestamps, sweep.iteration_timestamp)
-    end
+#         push!(sweep.iteration_timestamps, sweep.iteration_timestamp)
+#     end
 
-    if (sweep.cache == nothing) ||
-       (sweep.parameters != kwargs) ||
-       (sweep.tree_hash != target_hash(sweep))
+#     if (sweep.cache == nothing) ||
+#        (sweep.parameters != kwargs) ||
+#        (sweep.tree_hash != target_hash(sweep))
 
-        @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): cache not valid."
-        path = target_fullpath(sweep, kwargs)
-        if isfile(path)
-            d = load(path)
-            @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
-            if (d["hash"]      == sweep.hash) &&
-               (d["params"]    == kwargs)     &&
-               (d["tree_hash"] == sweep.tree_hash)
+#         @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): cache not valid."
+#         path = target_fullpath(sweep, kwargs)
+#         if isfile(path)
+#             d = load(path)
+#             @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
+#             if (d["hash"]      == sweep.hash) &&
+#                (d["params"]    == kwargs)     &&
+#                (d["tree_hash"] == sweep.tree_hash)
 
-                sweep.cache      = d["cache"]
-                sweep.timestamp  = d["timestamp"]
-                sweep.parameters = d["params"]
-                sweep.tree_hash  = d["tree_hash"]
-            end
-        end
-    end
+#                 sweep.cache      = d["cache"]
+#                 sweep.timestamp  = d["timestamp"]
+#                 sweep.parameters = d["params"]
+#                 sweep.tree_hash  = d["tree_hash"]
+#             end
+#         end
+#     end
 
-    if !cache_uptodate(sweep; parameters=kwargs)
-        sweep_update!(sweep, variables_list, kwargs, parameters)
-    end
+#     if !cache_uptodate(sweep; parameters=kwargs)
+#         sweep_update!(sweep, variables_list, kwargs, parameters)
+#     end
 
-    return sweep.cache
-end
+#     return sweep.cache
+# end
 
 
 function sweep_update!(sweep, variables_list, parameters, nonvariables)
