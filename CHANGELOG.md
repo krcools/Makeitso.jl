@@ -1,3 +1,10 @@
+# Version 1.1
+
+- Deep dependencies are not constructed if a valid cache or backup is available for
+the toplevel target
+- Introduction of options `memonly` for the `@target` macro disables writing backups
+to disk.
+
 # Version 1.0
 
 - Exported function `getrow` allows for finding a row in a `DataFrame` using

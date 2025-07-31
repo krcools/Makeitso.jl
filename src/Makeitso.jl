@@ -24,6 +24,7 @@ mutable struct Target
     params
     tree_hash
     parameter_keys
+    mem_only
 end
 
 mutable struct Sweep
@@ -74,46 +75,6 @@ function make(target::Target, level=0; kwargs...)
     return target.cache
 end
 
-# function make2(target, level=0; kwargs...)
-
-#     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
-
-#     for t in target.deps
-#         make(t, level+1; kwargs...)
-#     end
-
-#     if (target.cache == nothing) ||
-#        (kwargs != target.params) ||
-#        (target_hash(target) != target.tree_hash)
-
-#         @info "target $(target.name) at $(NamedTuple(kwargs)): cache not valid."
-#         path = target_fullpath(target, kwargs)
-#         if isfile(path)
-#             d = load(path)
-#             @info "target $(target.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
-#             if d["hash"]      == target.hash &&
-#                d["params"]    == kwargs &&
-#                d["tree_hash"] == target_hash(target)
-
-#                 target.cache      = d[target.name]
-#                 target.timestamp  = d["timestamp"]
-#                 target.params     = d["params"]
-#                 target.tree_hash  = d["tree_hash"]
-#             else
-#                 @info "target $(target.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
-#             end
-#         else
-#             @info "target $(target.name) at $(NamedTuple(kwargs)): no backup found."
-#         end
-#     end
-
-#     if !cache_uptodate(target; parameters=kwargs)
-#         update!(target; kwargs...)
-#     end
-
-#     return target.cache
-# end
-
 
 function make(sweep::Sweep, level=0; kwargs...)
 
@@ -146,86 +107,6 @@ function make(sweep::Sweep, level=0; kwargs...)
     sweep_update!(sweep, configs, kwargs, parameters)
     return sweep.cache
 end
-
-# function make2(sweep::Sweep, level=0; kwargs...)
-
-#     kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
-
-#     parameters = Dict(
-#         (k,v) for (k,v) in kwargs if !(k in sweep.variable_keys)
-#     )
-
-#     for t in sweep.shared_deps
-#         make(t, level+1; parameters...)
-#     end
-
-#     variables_list = DrWatson.dict_list(
-#         Dict((s, kwargs[s]) for s in sweep.variable_keys)
-#     )
-
-#     sweep.iteration_timestamps = []
-#     for variables in variables_list
-
-#         # cache is definitely invalid since based on previous iteration variables
-#         sweep.iteration_cache = nothing
-#         for  dep in sweep.iteration_deps
-#             cleancacherecursive(dep)
-#         end
-
-#         for t in sweep.iteration_deps
-#             make(t, level+1; parameters..., variables...)
-#         end
-
-#         # Try to load a backup from disk
-#         path = iteration_fullpath(sweep, variables, parameters)
-#         if isfile(path)
-#             d = load(path)
-#             @info "iteration $(sweep.name) at $(NamedTuple(variables)): loaded from $(relpath(path, projectdir()))"
-#             if d["hash"] == sweep.hash &&
-#                d["params"] == merge(parameters, variables) &&
-#                d["tree_hash"] == sweep.tree_hash
-
-#                 sweep.iteration_cache      = d
-#                 sweep.iteration_timestamp  = d["timestamp"]
-#                 sweep.iteration_parameters = d["params"]
-#                 sweep.tree_hash            = d["tree_hash"]
-#             end
-#         end
-
-#         if !iteration_cache_uptodate(sweep; parameters..., variables...)
-#             iteration_update!(sweep, variables, parameters)
-#         end
-
-#         push!(sweep.iteration_timestamps, sweep.iteration_timestamp)
-#     end
-
-#     if (sweep.cache == nothing) ||
-#        (sweep.parameters != kwargs) ||
-#        (sweep.tree_hash != target_hash(sweep))
-
-#         @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): cache not valid."
-#         path = target_fullpath(sweep, kwargs)
-#         if isfile(path)
-#             d = load(path)
-#             @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
-#             if (d["hash"]      == sweep.hash) &&
-#                (d["params"]    == kwargs)     &&
-#                (d["tree_hash"] == sweep.tree_hash)
-
-#                 sweep.cache      = d["cache"]
-#                 sweep.timestamp  = d["timestamp"]
-#                 sweep.parameters = d["params"]
-#                 sweep.tree_hash  = d["tree_hash"]
-#             end
-#         end
-#     end
-
-#     if !cache_uptodate(sweep; parameters=kwargs)
-#         sweep_update!(sweep, variables_list, kwargs, parameters)
-#     end
-
-#     return sweep.cache
-# end
 
 
 function sweep_update!(sweep, variables_list, parameters, nonvariables)
@@ -292,6 +173,8 @@ function update!(target::Target; kwargs...)
     target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
     target.timestamp = time()
     target.tree_hash = target_hash(target, hash(nothing))
+    target.mem_only && return
+
     save(fullpath, Dict(
         target.name => target.cache,
         "timestamp" => target.timestamp,
@@ -305,7 +188,22 @@ end
 
 
 
-macro target(out, recipe)
+macro target(args...)
+
+    if length(args) == 2
+        options = :(memonly=false)
+        out = args[1]
+        recipe = args[2]
+    elseif length(args) == 3
+        options = args[1]
+        out = args[2]
+        recipe = args[3]
+    else
+        error("Invalid number of arguments to @target macro. Expected 2 or 3")
+    end
+
+    @assert options isa Expr && options.head == :(=) && options.args[1] == :memonly
+    memonly = options.args[2]
 
     @assert out isa Symbol
     @assert recipe.head == :->
@@ -321,12 +219,8 @@ macro target(out, recipe)
     end
 
     tp = recipe.args[1]
-    # if tp isa Symbol # special case for single argument
-    #     push!(tnames, esc(tp))
-    # else
     @assert tp.head == :tuple
     for arg in tp.args
-        # arg isa Symbol || continue # skips keyword arguments
         if arg isa Symbol
             push!(tnames, esc(arg))
         elseif arg isa Expr && arg.head == :parameters
@@ -345,52 +239,32 @@ macro target(out, recipe)
     # add kwargs... to the argument list
     tp = add_kwargs_to_args!(tp)
 
-    # move into the retunred expression
-    # @show parameter_keys
-
-    # args = recipe.args[1]
-    # @assert args.head == :tuple
-    # for (i,arg) in pairs(args.args)
-    #     if arg isa Expr && arg.head == :parameters
-    #         for (j,p) in pairs(arg.args)
-    #             if p isa Expr && p.head == :kw
-    #                 push!(variable_keys, QuoteNode(p.args[1]))
-    #                 arg.args[j] = p.args[1]
-    #             end
-    #         end
-    #     elseif arg isa Expr && arg.head == :call
-    #         @assert arg.args[1] == :!
-    #         push!(iteration_deps, esc(arg.args[2]))
-    #         args.args[i] = arg.args[2]
-    #     elseif arg isa Symbol
-    #         push!(shared_deps, esc(arg))
-    #     else
-    #         error("Unexpected recipe argument: $arg")
-    #     end
-    # end
+    fn = string(__source__.file)
+    rp = dirname(relpath(fn, projectdir()))
+    sn = splitext(basename(fn))[1]
+    path = joinpath(rp, sn) # "examples/sweep"
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)
     if exists
         xp = quote
             if $recipe_hash != $(esc(out)).hash
+                @assert typeof($(esc(out))) <: Target "Target $(esc(out)) musn't be redefined as a different type."
+                $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
                 $(esc(out)).deps = [$(tnames...)]
                 $(esc(out)).recipe = $(esc(recipe))
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
+                $(esc(out)).name = $(String(out))
                 $(esc(out)).hash = $recipe_hash
+                $(esc(out)).relpath = $path
                 $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
                 $(esc(out)).parameter_keys = $(parameter_keys)
+                $(esc(out)).mem_only = $memonly
                 append_deps_parameter_keys!($(esc(out)), $(parameter_keys))
-                # full_path = target_fullpath($(esc(out)), $(esc(out)).params)
             end
         end
     else
-        fn = string(__source__.file)
-        rp = dirname(relpath(fn, projectdir()))
-        sn = splitext(basename(fn))[1]
-        path = joinpath(rp, sn) # "examples/sweep"
-
         xp = quote
             $(esc(out)) = Target(
                 [$(tnames...)],
@@ -403,10 +277,9 @@ macro target(out, recipe)
                 nothing,
                 zero(UInt64),
                 $(parameter_keys),
+                $(memonly),
                 )
-            # println("creation [before]: ", $(esc(out).parameter_keys))
             append_deps_parameter_keys!($(esc(out)), $(esc(out)).parameter_keys)
-            # println("creation [after]: ", $(esc(out).parameter_keys))
             $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
         end
     end
