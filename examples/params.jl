@@ -20,7 +20,7 @@ println("--- Recipe for B modified! ---")
 x = make(D; h=2)[end]
 @assert x ≈ (20+2pi)
 
-x = make(D; h=3)[end]
-x = make(D; h=2)[end]
+x = make(D; h=3)[end]; @show x
+x = make(D; h=2)[end]; @show x
 
 end

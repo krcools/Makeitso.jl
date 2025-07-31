@@ -51,10 +51,32 @@ function Target(name, recipe, deps, hash, simname)
     t = Target(deps, recipe, 0.0, nothing, name, hash, simname, nothing)
 end
 
-function make(target, level=0; kwargs...)
+
+function make(target::Target, level=0; kwargs...)
+    kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
+
+    if cache_uptodate(target; parameters=kwargs)
+        return target.cache
+    end
+
+    try_loading(target, kwargs)
+
+    if cache_uptodate(target; parameters=kwargs)
+        return target.cache
+    end
+
+    for t in target.deps
+        make(t, level+1; kwargs...)
+    end
+
+    update!(target; kwargs...)
+
+    return target.cache
+end
+
+function make2(target, level=0; kwargs...)
 
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
-    # @show target.name kwargs
 
     for t in target.deps
         make(t, level+1; kwargs...)
@@ -66,7 +88,6 @@ function make(target, level=0; kwargs...)
 
         @info "target $(target.name) at $(NamedTuple(kwargs)): cache not valid."
         path = target_fullpath(target, kwargs)
-        # @show path
         if isfile(path)
             d = load(path)
             @info "target $(target.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
@@ -91,66 +112,44 @@ function make(target, level=0; kwargs...)
     end
 
     return target.cache
-
-    # # No file means this is the first run ever
-    # # @show fullpath
-    # # @show isfile(fullpath)
-    # if !isfile(fullpath)
-    #     @info "No backup found for $(target.name)."
-    #     update!(target; kwargs...)
-    #     @info "level $level dep $(target.name): computed from dependencies [initial computation]."
-    #     return target.cache
-    # end
-
-    # # Target was made in previous session. Is it up-to-date?
-    # deps_stamp = reduce(max, getfield.(target.deps, :timestamp), init=0.0)
-    # # @show NamedTuple(kwargs)
-    # # @show target.params
-    # # @show kwargs != target.params
-    # if target.cache == nothing || (kwargs != target.params)
-    #     d = load(fullpath)
-    #     @info "target loaded from location: $(relpath(fullpath, projectdir())))"
-    #     if d["hash"] != target.hash
-    #         update!(target; kwargs...)
-    #         @info "level $level dep $(target.name) on disk but recomputed from deps [recipe modified]."
-    #     elseif d["params"] != kwargs
-    #         update!(target; kwargs...)
-    #         @info "level $level dep $(target.name) on disk but recomputed from deps [parameters modified]."
-    #     elseif d["timestamp"] < deps_stamp
-    #         update!(target; kwargs...)
-    #         @info "level $level dep $(target.name) on disk but recomputed from deps [out-of-date]."
-    #     else
-    #         target.timestamp = d["timestamp"]
-    #         target.cache = d[String(target.name)]
-    #         target.params = d["params"]
-    #         @info "level $level dep $(target.name): restored from disk."
-    #     end
-    #     return target.cache
-    # end
-
-    # # Target was computed in this session. Is it up-to-date?
-    # if target.timestamp < deps_stamp
-    #     update!(target; kwargs...)
-    #     @info "level $level dep $(target.name) in memory but recomputed from deps [out-of-date]."
-    #     return target.cache
-    # elseif target.params != kwargs
-    #     # @show target.params
-    #     # @show kwargs
-    #     update!(target; kwargs...)
-    #     @info "level $level dep $(target.name) in memory but recomputed from deps [parameters modified]."
-    #     return target.cache
-    # else
-    #     @info "level $level dep $(target.name): retrieved from memory."
-    #     return target.cache
-    # end
 end
-
 
 
 function make(sweep::Sweep, level=0; kwargs...)
 
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
-    # @show sweep.name kwargs
+    parameters = Dict((k,v) for (k,v) in kwargs if !(k in sweep.variable_keys))
+    configs = DrWatson.dict_list(Dict((s, kwargs[s]) for s in sweep.variable_keys))
+
+    cache_uptodate(sweep; parameters=kwargs) && return sweep.cache
+    try_loading(sweep, kwargs)
+    cache_uptodate(sweep; parameters=kwargs) && return sweep.cache
+
+    for t in sweep.shared_deps
+        make(t, level+1; parameters...)
+    end
+
+    sweep.iteration_timestamps = []
+    for variables in configs
+
+        iteration_cache_uptodate(sweep; parameters..., variables...) && continue
+        try_loading_iteration(sweep, variables, parameters)
+        iteration_cache_uptodate(sweep; parameters..., variables...) && continue
+
+        for t in sweep.iteration_deps
+            make(t, level+1; parameters..., variables...)
+        end
+
+        iteration_update!(sweep, variables, parameters)
+    end
+
+    sweep_update!(sweep, configs, kwargs, parameters)
+    return sweep.cache
+end
+
+function make2(sweep::Sweep, level=0; kwargs...)
+
+    kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
 
     parameters = Dict(
         (k,v) for (k,v) in kwargs if !(k in sweep.variable_keys)
@@ -160,8 +159,6 @@ function make(sweep::Sweep, level=0; kwargs...)
         make(t, level+1; parameters...)
     end
 
-    # @show kwargs
-    # @show sweep.variable_keys
     variables_list = DrWatson.dict_list(
         Dict((s, kwargs[s]) for s in sweep.variable_keys)
     )
@@ -210,13 +207,6 @@ function make(sweep::Sweep, level=0; kwargs...)
         path = target_fullpath(sweep, kwargs)
         if isfile(path)
             d = load(path)
-            # @show d["hash"] sweep.hash
-            # @show d["params"] kwargs
-            # @show d["tree_hash"] sweep.tree_hash
-
-            # @show d["hash"] == sweep.hash
-            # @show d["params"] == kwargs
-            # @show d["tree_hash"] == sweep.tree_hash
             @info "Sweep $(sweep.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
             if (d["hash"]      == sweep.hash) &&
                (d["params"]    == kwargs)     &&
@@ -246,7 +236,7 @@ function sweep_update!(sweep, variables_list, parameters, nonvariables)
     # collect the results in the .dir folder
     @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
     df = loadsims(iteration_dirname(sweep, nonvariables), variables_list)
-    select!(df, Not([:timestamp, :hash, :path, :params]))
+    select!(df, Not([:timestamp, :hash, :path, :params, :tree_hash]))
 
     sweep.cache = df
     sweep.timestamp = time()
@@ -288,9 +278,6 @@ function iteration_update!(sweep, variables, parameters)
         ),
         (;sweep.iteration_parameters...),
     )
-
-    # @show typeof(dct)
-    # @show dct
 
     jldsave(fullpath; dct...)
 end

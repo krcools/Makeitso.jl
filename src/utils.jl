@@ -85,10 +85,10 @@ function iteration_cache_uptodate(sweep; kwargs...)
         @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache not available."
         return false
     end
-    if sweep.iteration_timestamp < reduce(max, getfield.(vcat(sweep.shared_deps, sweep.iteration_deps), :timestamp), init=0.0)
-        @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache is out-of-date."
-        return false
-    end
+    # if sweep.iteration_timestamp < reduce(max, getfield.(vcat(sweep.shared_deps, sweep.iteration_deps), :timestamp), init=0.0)
+    #     @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache is out-of-date."
+    #     return false
+    # end
     if sweep.iteration_parameters != Dict(kwargs)
         @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): parameters have changed."
         return false
@@ -106,13 +106,11 @@ function cache_uptodate(sweep::Sweep; parameters)
         @info "Sweep $(sweep.name) at $(parameters): not cached in memory."
         return false
     end
-    if sweep.timestamp < reduce(max, sweep.iteration_timestamps, init=0.0)
-        @info "Sweep $(sweep.name) at $(parameters): cache is out-of-date."
-        return false
-    end
+    # if sweep.timestamp < reduce(max, sweep.iteration_timestamps, init=0.0)
+    #     @info "Sweep $(sweep.name) at $(parameters): cache is out-of-date."
+    #     return false
+    # end
     if sweep.parameters != parameters
-        # @show sweep.parameters
-        # @show parameters
         @info "Sweep $(sweep.name) at $(parameters): parameters have changed."
         return false
     end
@@ -129,14 +127,12 @@ function cache_uptodate(sweep::Target; parameters)
         @info "target $(sweep.name) at $(NamedTuple(parameters)): cache empty."
         return false
     end
-    if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
-        # @show sweep.timestamp
-        # @show reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
-        @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
-        return false
-    end
+    # if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
+    #     @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
+    #     return false
+    # end
     if sweep.params != parameters
-        @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache parameters incorrect."
+        @info "target $(sweep.name) at $(NamedTuple(parameters)): cache parameters incorrect."
         return false
     end
     if sweep.tree_hash != target_hash(sweep)
@@ -223,4 +219,72 @@ function append_deps_parameter_keys!(target::Sweep, parameter_keys)
     unique!(parameter_keys)
     # @show parameter_keys
     return parameter_keys
+end
+
+
+
+function try_loading(target::Target, kwargs)
+
+    path = target_fullpath(target, kwargs)
+    if isfile(path)
+        d = load(path)
+        @info "target $(target.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))."
+        if d["hash"]      == target.hash        &&
+           d["params"]    == kwargs             &&
+           d["tree_hash"] == target_hash(target)
+
+            target.cache      = d[target.name]
+            target.timestamp  = d["timestamp"]
+            target.params     = d["params"]
+            target.tree_hash  = d["tree_hash"]
+        else
+            @info "target $(target.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
+        end
+    else
+        @info "target $(target.name) at $(NamedTuple(kwargs)): no backup found at $(relpath(path, projectdir()))."
+    end
+end
+
+
+function try_loading(sweep::Sweep, kwargs)
+    path = target_fullpath(sweep, kwargs)
+    if isfile(path)
+        d = load(path)
+        @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): loaded from $(relpath(path, projectdir()))"
+        if  (d["hash"]      == sweep.hash) &&
+            (d["params"]    == kwargs)     &&
+            (d["tree_hash"] == sweep.tree_hash)
+
+            sweep.cache      = d["cache"]
+            sweep.timestamp  = d["timestamp"]
+            sweep.parameters = d["params"]
+            sweep.tree_hash  = d["tree_hash"]
+        else
+            @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): backup recipe or parameters incorrect."
+        end
+    else
+        @info "sweep $(sweep.name) at $(NamedTuple(kwargs)): no backup found at $(relpath(path, projectdir()))"
+    end
+end
+
+
+function try_loading_iteration(sweep::Sweep, variables, parameters)
+    path = iteration_fullpath(sweep, variables, parameters)
+    if isfile(path)
+        d = load(path)
+        @info "iteration $(sweep.name) at $(NamedTuple(variables)): loaded from $(relpath(path, projectdir()))"
+        if d["hash"] == sweep.hash &&
+            d["params"] == merge(parameters, variables) &&
+            d["tree_hash"] == sweep.tree_hash
+
+            sweep.iteration_cache      = d
+            sweep.iteration_timestamp  = d["timestamp"]
+            sweep.iteration_parameters = d["params"]
+            sweep.tree_hash            = d["tree_hash"]
+        else
+            @info "iteration $(sweep.name) at $(NamedTuple(variables)): backup recipe or parameters incorrect."
+        end
+    else
+        @info "iteration $(sweep.name) at $(NamedTuple(variables)): no backup found at $(relpath(path, projectdir()))"
+    end
 end
