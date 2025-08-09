@@ -28,15 +28,6 @@ function fn_pars_hash(target, config)
     return fn
 end
 
-# function fn_pars_hash(sweep::Sweep, config)
-#     bn = DrWatson.savename(config)
-#     hs = hash(config)
-#     hs = target_hash(sweep, hs)
-
-#     fn = bn == "" ? string(hs) : string(bn, ".", hs)
-#     return fn
-# end
-
 
 # Position independent hashing of expressions
 pihash(x) = pihash(x, zero(UInt))
@@ -56,9 +47,6 @@ function target_dirname(target)
 end
 
 function target_fullpath(target, parameters)
-    # @show parameters
-    # parameters = filter(p -> p.first in target.parameter_keys, parameters)
-    # @show parameters
     return joinpath(target_dirname(target), target.name * "." * fn_pars_hash(target, parameters) * ".jld2")
 end
 
@@ -71,13 +59,11 @@ function sweep_fullpath(sweep)
 end
 
 function iteration_dirname(sweep, parameters)
-    # @show parameters
-    # @show fn_pars_hash(sweep, parameters)
     return joinpath(DrWatson.datadir(sweep.relpath), sweep.name * "." * fn_pars_hash(sweep, parameters) * ".dir")
 end
 
 function iteration_fullpath(sweep, variables_dict, parameters_dict)
-    joinpath(iteration_dirname(sweep, parameters_dict), fn_pars_hash(sweep, variables_dict) * ".jld2")
+    joinpath(iteration_dirname(sweep, nothing), fn_pars_hash(sweep, merge(parameters_dict, variables_dict)) * ".jld2")
 end
 
 function iteration_cache_uptodate(sweep; kwargs...)
@@ -85,10 +71,6 @@ function iteration_cache_uptodate(sweep; kwargs...)
         @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache empty."
         return false
     end
-    # if sweep.iteration_timestamp < reduce(max, getfield.(vcat(sweep.shared_deps, sweep.iteration_deps), :timestamp), init=0.0)
-    #     @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): cache is out-of-date."
-    #     return false
-    # end
     if sweep.iteration_parameters != Dict(kwargs)
         @info "iteration $(sweep.name) at $(NamedTuple(kwargs)): parameters changed."
         return false
@@ -106,10 +88,6 @@ function cache_uptodate(sweep::Sweep; parameters)
         @info "Sweep $(sweep.name) at $(parameters): cache empty."
         return false
     end
-    # if sweep.timestamp < reduce(max, sweep.iteration_timestamps, init=0.0)
-    #     @info "Sweep $(sweep.name) at $(parameters): cache is out-of-date."
-    #     return false
-    # end
     if sweep.parameters != parameters
         @info "Sweep $(sweep.name) at $(parameters): parameters changed."
         return false
@@ -127,10 +105,6 @@ function cache_uptodate(sweep::Target; parameters)
         @info "target $(sweep.name) at $(NamedTuple(parameters)): cache empty."
         return false
     end
-    # if sweep.timestamp < reduce(max, getfield.(sweep.deps, :timestamp), init=0.0)
-    #     @info "target $(sweep.name) at $(NamedTuple(parameters)):  cache older than deps."
-    #     return false
-    # end
     if sweep.params != parameters
         @info "target $(sweep.name) at $(NamedTuple(parameters)): parameters changed."
         return false
@@ -144,18 +118,25 @@ function cache_uptodate(sweep::Target; parameters)
 end
 
 
-function loadsims(dirname, configs=nothing)
+function loadsims(dirname, configs, parameters)
     
+    @show dirname
     df = DrWatson.collect_results(datadir(dirname))
     configs == nothing && return df
 
-    # @show df
-    # @show configs
+    # @show "before parameter filtering" df
 
     df = filter!(df) do row
-        # @show row
+        for (k,v) in pairs(parameters)
+            row[k] !== v && return false
+        end
+        return true
+    end
+
+    # @show "before config filtering" df
+
+    df = filter!(df) do row
         for config in configs
-            # @show config
             config_found = true
             for (k,v) in pairs(config)
                 row[k] !== v && (config_found = false) && break
@@ -165,7 +146,8 @@ function loadsims(dirname, configs=nothing)
         return false
     end
 
-    # @show df
+    # @show "after filtering" df
+
     return df
 end
 
@@ -205,7 +187,6 @@ function append_deps_parameter_keys!(target::Target, parameter_keys)
         append!(parameter_keys, dep.parameter_keys)
     end
     unique!(parameter_keys)
-    # @show parameter_keys
     return parameter_keys
 end
 
@@ -217,7 +198,6 @@ function append_deps_parameter_keys!(target::Sweep, parameter_keys)
         append!(parameter_keys, dep.parameter_keys)
     end
     unique!(parameter_keys)
-    # @show parameter_keys
     return parameter_keys
 end
 

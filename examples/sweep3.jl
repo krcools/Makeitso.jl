@@ -1,5 +1,5 @@
 # deptfirst build
-# test of filename for parameters that cannot be rendered as well
+# test of filename for parameters that cannot be rendered
 
 using Makeitso
 using DataFrames

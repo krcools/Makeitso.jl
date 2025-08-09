@@ -116,7 +116,7 @@ function sweep_update!(sweep, variables_list, parameters, nonvariables)
 
     # collect the results in the .dir folder
     @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
-    df = loadsims(iteration_dirname(sweep, nonvariables), variables_list)
+    df = loadsims(iteration_dirname(sweep, nothing), variables_list, nonvariables)
     select!(df, Not([:timestamp, :hash, :path, :params, :tree_hash]))
 
     sweep.cache = df
