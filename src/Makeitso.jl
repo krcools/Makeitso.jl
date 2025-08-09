@@ -115,7 +115,7 @@ function sweep_update!(sweep, variables_list, parameters, nonvariables)
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
-    @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
+    # @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
     df = loadsims(iteration_dirname(sweep, nothing), variables_list, nonvariables)
     select!(df, Not([:timestamp, :hash, :path, :params, :tree_hash]))
 
@@ -124,12 +124,12 @@ function sweep_update!(sweep, variables_list, parameters, nonvariables)
     sweep.parameters = parameters
     sweep.tree_hash = target_hash(sweep, hash(nothing))
 
-    save(fullpath, Dict(
-        "cache" => sweep.cache,
-        "timestamp" => sweep.timestamp,
-        "hash" => sweep.hash,
-        "params" => sweep.parameters,
-        "tree_hash" => sweep.tree_hash))
+    # save(fullpath, Dict(
+    #     "cache" => sweep.cache,
+    #     "timestamp" => sweep.timestamp,
+    #     "hash" => sweep.hash,
+    #     "params" => sweep.parameters,
+    #     "tree_hash" => sweep.tree_hash))
 end
 
 function iteration_update!(sweep, variables, parameters)
@@ -350,8 +350,8 @@ macro sweep(out, recipe)
                 $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)) , hash(nothing))
                 $(esc(out)).parameter_keys = $(parameter_keys)
                 append_deps_parameter_keys!($(esc(out)), $(parameter_keys))
-                full_path = Makeitso.sweep_fullpath($(esc(out)))
-                isfile(full_path) && rm(full_path)
+                # full_path = Makeitso.sweep_fullpath($(esc(out)))
+                # isfile(full_path) && rm(full_path)
             end
         end
     else

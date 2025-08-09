@@ -15,4 +15,4 @@ end
     (;sol=sqrt(B))
 end
 
-make(C; h=[1,2,3], p=12)
+make(C; h=[1,3,4], p=12)

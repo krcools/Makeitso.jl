@@ -43,20 +43,22 @@ pihash(x::Any,h) = hash(x,h)
 
 
 function target_dirname(target)
-    return joinpath(DrWatson.datadir(target.relpath))
+    return joinpath(DrWatson.datadir(target.relpath), target.name * "." * fn_pars_hash(target, nothing) * ".dir")
+    # return joinpath(DrWatson.datadir(target.relpath))
 end
 
 function target_fullpath(target, parameters)
-    return joinpath(target_dirname(target), target.name * "." * fn_pars_hash(target, parameters) * ".jld2")
+    # return joinpath(target_dirname(target), target.name * "." * fn_pars_hash(target, parameters) * ".jld2")
+    return joinpath(target_dirname(target), fn_pars_hash(target, parameters) * ".jld2")
 end
 
-function sweep_dirname(sweep)
-    return joinpath(DrWatson.datadir(sweep.relpath))
-end
+# function sweep_dirname(sweep)
+#     return joinpath(DrWatson.datadir(sweep.relpath))
+# end
 
-function sweep_fullpath(sweep)
-    return joinpath(sweep_dirname(sweep), String(sweep.name) * ".jld2")
-end
+# function sweep_fullpath(sweep)
+#     return joinpath(sweep_dirname(sweep), String(sweep.name) * ".jld2")
+# end
 
 function iteration_dirname(sweep, parameters)
     return joinpath(DrWatson.datadir(sweep.relpath), sweep.name * "." * fn_pars_hash(sweep, parameters) * ".dir")
@@ -119,12 +121,9 @@ end
 
 
 function loadsims(dirname, configs, parameters)
-    
-    @show dirname
+
     df = DrWatson.collect_results(datadir(dirname))
     configs == nothing && return df
-
-    # @show "before parameter filtering" df
 
     df = filter!(df) do row
         for (k,v) in pairs(parameters)
@@ -132,8 +131,6 @@ function loadsims(dirname, configs, parameters)
         end
         return true
     end
-
-    # @show "before config filtering" df
 
     df = filter!(df) do row
         for config in configs
@@ -145,8 +142,6 @@ function loadsims(dirname, configs, parameters)
         end
         return false
     end
-
-    # @show "after filtering" df
 
     return df
 end
