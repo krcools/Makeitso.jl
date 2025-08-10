@@ -24,7 +24,7 @@ function fn_pars_hash(target, config)
     hs = hash(config)
     hs = target_hash(target, hs)
 
-    fn = bn == "" ? string(hs) : string(bn, ".", hs)
+    fn = bn == "" ? string(hs, base=62) : bn * "." * string(hs, base=62)
     return fn
 end
 
@@ -125,23 +125,33 @@ function loadsims(dirname, configs, parameters)
     df = DrWatson.collect_results(datadir(dirname))
     configs == nothing && return df
 
+    # @show configs
+    # @show parameters
+    # @show df
+
     df = filter!(df) do row
         for (k,v) in pairs(parameters)
-            row[k] !== v && return false
+            row[k] === missing && return false
+            row[k] != v && return false
         end
         return true
     end
+
+    # @show df
 
     df = filter!(df) do row
         for config in configs
             config_found = true
             for (k,v) in pairs(config)
-                row[k] !== v && (config_found = false) && break
+                row[k] === missing && (config_found = false) && break
+                row[k] != v && (config_found = false) && break
             end
             config_found && return true
         end
         return false
     end
+
+    # @show df
 
     return df
 end

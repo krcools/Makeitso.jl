@@ -1,7 +1,6 @@
-# test the combination of shared and iteration dependencies
+# test the ad-hoc sweep
 
 using Makeitso
-# using DataFrames
 
 @target base () -> 10
 
@@ -16,7 +15,7 @@ module Mod
 end
 
 @target ore (;seed, p) -> begin
-    y= Mod.f(seed)
+    y= Mod.f(seed) + p
     return y
 end
 
@@ -25,21 +24,11 @@ end
 end
 
 @target average (solutions,;seed, p) -> begin
-    # println(length(solutions.sol))
     sum(solutions.sol)
 end
 
-
-
-
 @show x = make(average; seed=[1.0,2.0,3.0], p=3.14)
 @show y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
-# @assert x ≈ 5.146264369941973
 
-# Base.remove_linenums!(@macroexpand @sweep2 solutions (base, !ore, ;seed = seeds, p) -> begin
-#     @show seed
-#     return (;sol = base + Mod.square_root(ore))
-# end)
-
-# df = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
-
+z1 = sweep(average; seed=Ref([1.0,2.0,3.0]), p=[2.78, 3.14])
+z2 = sweep(average; seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])

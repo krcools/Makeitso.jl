@@ -9,7 +9,7 @@ using MacroTools
 
 export @target
 export @sweep, @sweep2
-export make
+export make, sweep
 export getrow
 
 
@@ -384,6 +384,80 @@ macro sweep(out, recipe)
         end
     end
     return xp
+end
+
+
+function sweep(t::Target; kwargs...)
+
+    tname = Symbol(t.name)
+
+    params = []
+    vars = []
+
+    var_keys = []
+    par_keys = []
+
+    for (k,v) in kwargs
+        try
+            sz = size(v)
+            if sz != ()
+                push!(vars, (k,v))
+                push!(var_keys, k)
+            else
+                if v isa Ref
+                    push!(params, (k, v[]))
+                    push!(par_keys, k)
+                else
+                    push!(params, (k,v))
+                    push!(par_keys, k)
+                end
+            end
+        catch
+            push!(params, (k,v))
+            push!(par_keys, k)
+        end
+    end
+
+    params = Dict(params)
+    vars = Dict(vars)
+
+    # fn = string(@__FILE__)
+    # rp = dirname(relpath(fn, projectdir()))
+    # sn = splitext(basename(fn))[1]
+    # rp = joinpath(rp, sn)
+    rp = t.relpath
+
+    recipe_xp = :((t; kwargs...) -> (d=Dict(tname=>t); NamedTuple(d)))
+    recipe_fn = (t; kwargs...) -> (d=Dict(tname=>t); NamedTuple(d))
+    # recipe = :( (t; kwargs...) -> (;$tname=t) )
+
+    # @show params
+    # @show vars
+    # @show rp
+    # @show Base.remove_linenums!(recipe_xp)
+
+    sweep = Sweep(
+        "$(t.name).sweep",
+        rp,
+        [],
+        [t],
+        var_keys,
+        recipe_fn,
+        pihash(recipe_xp),
+        nothing,
+        0.0,
+        params,
+        nothing, # iteration_cache
+        0.0, # iteration_timestamp
+        nothing, # iteration_parameters
+        [], # iteration_timestamps
+        zero(UInt64), # tree_hash
+        par_keys, # parameter_keys
+    )
+    append_deps_parameter_keys!(sweep, sweep.parameter_keys)
+    sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
+
+    df = make(sweep; vars..., params...)
 end
 
 end # module
