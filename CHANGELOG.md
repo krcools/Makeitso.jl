@@ -1,3 +1,9 @@
+# Version 2.0
+
+- Support for the very common case of sweeps for a top level target without the necessity to make an explicit `Sweep`.
+- Hashes are represented in base 62 to shorten filenames
+- Dirnames are now based on just the tree recipe, filenames on the parameters
+
 # Version 1.1
 
 - Deep dependencies are not constructed if a valid cache or backup is available for
