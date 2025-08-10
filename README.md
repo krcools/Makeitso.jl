@@ -17,19 +17,20 @@ Consider the script in file `DrWatson.projectdir("examples","sweep4.jl")`
 ```julia
 using Makeitso
 
+@target base () -> 10
+
 module Mod
     function f(x)
         return x + 1
     end
+
     function square_root(x)
         return sqrt(x)
     end
 end
 
-@target base () -> 10
-
 @target ore (;seed, p) -> begin
-    y= Mod.f(seed)
+    y= Mod.f(seed) + p
     return y
 end
 
@@ -41,8 +42,11 @@ end
     sum(solutions.sol)
 end
 
-@show x = make(average; seed=[1.0,2.0,3.0], p=3.14)
-@show y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
+x = make(average; seed=[1.0,2.0,3.0], p=3.14)
+y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
+
+z1 = sweep(average; seed=Ref([1.0,2.0,3.0]), p=[2.78, 3.14])
+z2 = sweep(average; seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])
 ```
 
 The toplevel `@target` is `average`, which computes the sum of all entries in the column `sol` of the `DataFrame` computed by the `@sweep` `solutions`. The `@sweep` `solutions` has two dependencies: one named `base` which is shared among all iterations (which should and will only be computed once), and another named `ore` which depends on the swept over variable `seed`. Iteration specific dependencies are declared by an exclamation mark.
@@ -51,89 +55,316 @@ Running this script the first time in a new Julia session results in
 
 ```
 [ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache empty.
-[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): no backup found at data\examples\sweep4\average.p=3.14.2447376696785551322.jld2.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\average.63678zPY2rK.dir\p=3.14.CoXCiMub8Ro.jld2.
 [ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache empty.
-[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): not cached in memory.
-[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): no backup found at data\examples\sweep4\solutions.p=3.14.2188912756489576653.jld2
-[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): not cached in memory.
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14.DxZMoriX5cF.jld2
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): cache empty.
 [ Info: target base at NamedTuple(): cache empty.
-[ Info: target base at NamedTuple(): no backup found at data\examples\sweep4\base.8143066964374671252.jld2.
+[ Info: target base at NamedTuple(): no backup at data\examples\sweep5\base.BrKrFd0kr39.dir\9hXKeOK7BYa.jld2.
 [ Info: target base at NamedTuple(): cache empty.
 [ Info: !!! target base at NamedTuple(): computing from deps.
-[ Info: iteration solutions at (p = 3.14, seed = 1.0): cache not available.
-[ Info: iteration solutions at (seed = 1.0,): no backup found at data\examples\sweep4\solutions.p=3.14.6542551602648920450.dir\seed=1.0.10313548746577572791.jld2
-[ Info: iteration solutions at (p = 3.14, seed = 1.0): cache not available.
+[ Info: iteration solutions at (p = 3.14, seed = 1.0): cache empty.
+[ Info: iteration solutions at (seed = 1.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=1.0.4a4MWlZncdu.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 1.0): cache empty.
 [ Info: target ore at (p = 3.14, seed = 1.0): cache empty.
-[ Info: target ore at (p = 3.14, seed = 1.0): no backup found at data\examples\sweep4\ore.p=3.14_seed=1.0.10155953109734089458.jld2.
+[ Info: target ore at (p = 3.14, seed = 1.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=3.14_seed=1.0.zNZMKtM5eu.jld2.
 [ Info: target ore at (p = 3.14, seed = 1.0): cache empty.
 [ Info: !!! target ore at (p = 3.14, seed = 1.0): computing from deps.
 [ Info: !!! iteration solutions at Dict(:seed => 1.0): computing from deps.
-[ Info: iteration solutions at (p = 3.14, seed = 2.0): parameters have changed.
-[ Info: iteration solutions at (seed = 2.0,): no backup found at data\examples\sweep4\solutions.p=3.14.6542551602648920450.dir\seed=2.0.967288288172012261.jld2
-[ Info: iteration solutions at (p = 3.14, seed = 2.0): parameters have changed.
-[ Info: target ore at (p = 3.14, seed = 2.0): cache parameters incorrect.
-[ Info: target ore at (p = 3.14, seed = 2.0): no backup found at data\examples\sweep4\ore.p=3.14_seed=2.0.9556143532797230738.jld2.
-[ Info: target ore at (p = 3.14, seed = 2.0): cache parameters incorrect.
+[ Info: iteration solutions at (p = 3.14, seed = 2.0): parameters changed.
+[ Info: iteration solutions at (seed = 2.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=2.0.K7yRD6aDT1W.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 2.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 2.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 2.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=3.14_seed=2.0.H4R2N6UhyO.jld2.
+[ Info: target ore at (p = 3.14, seed = 2.0): parameters changed.
 [ Info: !!! target ore at (p = 3.14, seed = 2.0): computing from deps.
 [ Info: !!! iteration solutions at Dict(:seed => 2.0): computing from deps.
-[ Info: iteration solutions at (p = 3.14, seed = 3.0): parameters have changed.
-[ Info: iteration solutions at (seed = 3.0,): no backup found at data\examples\sweep4\solutions.p=3.14.6542551602648920450.dir\seed=3.0.16301960159939599385.jld2
-[ Info: iteration solutions at (p = 3.14, seed = 3.0): parameters have changed.
-[ Info: target ore at (p = 3.14, seed = 3.0): cache parameters incorrect.
-[ Info: target ore at (p = 3.14, seed = 3.0): no backup found at data\examples\sweep4\ore.p=3.14_seed=3.0.16435246169964622506.jld2.
-[ Info: target ore at (p = 3.14, seed = 3.0): cache parameters incorrect.
+[ Info: iteration solutions at (p = 3.14, seed = 3.0): parameters changed.
+[ Info: iteration solutions at (seed = 3.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=3.0.5ykZTSxVHcI.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 3.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 3.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 3.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=3.14_seed=3.0.8TEnXyWUMx2.jld2.
+[ Info: target ore at (p = 3.14, seed = 3.0): parameters changed.
 [ Info: !!! target ore at (p = 3.14, seed = 3.0): computing from deps.
 [ Info: !!! iteration solutions at Dict(:seed => 3.0): computing from deps.
-[ Info: !!! sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): computing from deps.
-[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep4\solutions.p=3.14.6542551602648920450.dir for result files.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\solutions.1YvXce9RGRZ.dir for result files.
 [ Info: Added 3 entries.
 [ Info: !!! target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): computing from deps.
-x = make(average; seed = [1.0, 2.0, 3.0], p = 3.14) = 35.146264369941974
-[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache is up-to-date.
-y = make(solutions; seed = [1.0, 2.0, 3.0], p = 3.14) = 3×3 DataFrame
- Row │ sol       p         seed
-     │ Float64?  Float64?  Float64?
-─────┼──────────────────────────────
-   1 │  11.4142      3.14       1.0
-   2 │  11.7321      3.14       2.0
-   3 │  12.0         3.14       3.0
+[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache up-to-date.
+[ Info: Sweep average.sweep at Dict(:p => [2.78, 3.14], :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: sweep average.sweep at (p = [2.78, 3.14], seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\Ed6y2mjGtoh.jld2
+[ Info: Sweep average.sweep at Dict(:p => [2.78, 3.14], :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 2.78): cache empty.
+[ Info: iteration average.sweep at (p = 2.78,): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.J7GFC87U3Fh.jld2
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 2.78): cache empty.
+[ Info: target average at (p = 2.78, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: target average at (p = 2.78, seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\average.63678zPY2rK.dir\p=2.78.1nF5HKz03Py.jld2.
+[ Info: target average at (p = 2.78, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 2.78, :seed => [1.0, 2.0, 3.0]): parameters changed.
+[ Info: sweep solutions at (p = 2.78, seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78.HdKjxsMOmcr.jld2
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 2.78, :seed => [1.0, 2.0, 3.0]): parameters changed.
+[ Info: target base at NamedTuple(): cache up-to-date.
+[ Info: iteration solutions at (p = 2.78, seed = 1.0): parameters changed.
+[ Info: iteration solutions at (seed = 1.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78_seed=1.0.3KQV8mN5Rhl.jld2
+[ Info: iteration solutions at (p = 2.78, seed = 1.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 1.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 1.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=2.78_seed=1.0.3IA3pEDIKAh.jld2.
+[ Info: target ore at (p = 2.78, seed = 1.0): parameters changed.
+[ Info: !!! target ore at (p = 2.78, seed = 1.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 1.0): computing from deps.
+[ Info: iteration solutions at (p = 2.78, seed = 2.0): parameters changed.
+[ Info: iteration solutions at (seed = 2.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78_seed=2.0.5pavstnysqS.jld2
+[ Info: iteration solutions at (p = 2.78, seed = 2.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 2.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 2.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=2.78_seed=2.0.3ZOzuLvcGIY.jld2.
+[ Info: target ore at (p = 2.78, seed = 2.0): parameters changed.
+[ Info: !!! target ore at (p = 2.78, seed = 2.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 2.0): computing from deps.
+[ Info: iteration solutions at (p = 2.78, seed = 3.0): parameters changed.
+[ Info: iteration solutions at (seed = 3.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78_seed=3.0.3xBcrncVwDs.jld2
+[ Info: iteration solutions at (p = 2.78, seed = 3.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 3.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 3.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=2.78_seed=3.0.8FHnvLU9m86.jld2.
+[ Info: target ore at (p = 2.78, seed = 3.0): parameters changed.
+[ Info: !!! target ore at (p = 2.78, seed = 3.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 3.0): computing from deps.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\solutions.1YvXce9RGRZ.dir for result files.
+[ Info: Added 6 entries.
+[ Info: !!! target average at (p = 2.78, seed = [1.0, 2.0, 3.0]): computing from deps.
+[ Info: !!! iteration average.sweep at Dict(:p => 2.78): computing from deps.
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 3.14): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14,): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.824AT3Qr5iR.jld2
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 3.14): parameters changed.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.63678zPY2rK.dir\p=3.14.CoXCiMub8Ro.jld2.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache up-to-date.
+[ Info: !!! iteration average.sweep at Dict(:p => 3.14): computing from deps.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir for result files.
+[ Info: Added 2 entries.
+[ Info: Sweep average.sweep at Dict{Symbol, Vector}(:p => [2.78, 3.14], :seed => [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): cache empty.
+[ Info: sweep average.sweep at (p = [2.78, 3.14], seed = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\43CGkbnRcMc.jld2
+[ Info: Sweep average.sweep at Dict{Symbol, Vector}(:p => [2.78, 3.14], :seed => [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): cache empty.
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): cache empty.
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.J7GFC87U3Fh.jld2
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.824AT3Qr5iR.jld2
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.7OlQWfYVHko.jld2
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: target average at (p = 2.78, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: target average at (p = 2.78, seed = [4.0, 5.0, 6.0]): no backup at data\examples\sweep5\average.63678zPY2rK.dir\p=2.78.5hPMAUVKJFb.jld2.
+[ Info: target average at (p = 2.78, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 2.78, :seed => [4.0, 5.0, 6.0]): parameters changed.
+[ Info: sweep solutions at (p = 2.78, seed = [4.0, 5.0, 6.0]): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78.90Nt8ootwAE.jld2
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 2.78, :seed => [4.0, 5.0, 6.0]): parameters changed.
+[ Info: target base at NamedTuple(): cache up-to-date.
+[ Info: iteration solutions at (p = 2.78, seed = 4.0): parameters changed.
+[ Info: iteration solutions at (seed = 4.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78_seed=4.0.4l907SzgE7T.jld2
+[ Info: iteration solutions at (p = 2.78, seed = 4.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 4.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 4.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=2.78_seed=4.0.8KpxOdrOhEH.jld2.
+[ Info: target ore at (p = 2.78, seed = 4.0): parameters changed.
+[ Info: !!! target ore at (p = 2.78, seed = 4.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 4.0): computing from deps.
+[ Info: iteration solutions at (p = 2.78, seed = 5.0): parameters changed.
+[ Info: iteration solutions at (seed = 5.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78_seed=5.0.BcRxkq47v75.jld2
+[ Info: iteration solutions at (p = 2.78, seed = 5.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 5.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 5.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=2.78_seed=5.0.4DH70LVr2lx.jld2.
+[ Info: target ore at (p = 2.78, seed = 5.0): parameters changed.
+[ Info: !!! target ore at (p = 2.78, seed = 5.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 5.0): computing from deps.
+[ Info: iteration solutions at (p = 2.78, seed = 6.0): parameters changed.
+[ Info: iteration solutions at (seed = 6.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=2.78_seed=6.0.3Hd7aI1DeWL.jld2
+[ Info: iteration solutions at (p = 2.78, seed = 6.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 6.0): parameters changed.
+[ Info: target ore at (p = 2.78, seed = 6.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=2.78_seed=6.0.HwIz9PLreBb.jld2.
+[ Info: target ore at (p = 2.78, seed = 6.0): parameters changed.
+[ Info: !!! target ore at (p = 2.78, seed = 6.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 6.0): computing from deps.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\solutions.1YvXce9RGRZ.dir for result files.
+[ Info: Added 9 entries.
+[ Info: !!! target average at (p = 2.78, seed = [4.0, 5.0, 6.0]): computing from deps.
+[ Info: !!! iteration average.sweep at Dict{Symbol, Any}(:p => 2.78, :seed => [4.0, 5.0, 6.0]): computing from deps.
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.4fg2RrLKQ4G.jld2
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: target average at (p = 3.14, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: target average at (p = 3.14, seed = [4.0, 5.0, 6.0]): no backup at data\examples\sweep5\average.63678zPY2rK.dir\p=3.14.6blorQZib97.jld2.
+[ Info: target average at (p = 3.14, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [4.0, 5.0, 6.0]): parameters changed.
+[ Info: sweep solutions at (p = 3.14, seed = [4.0, 5.0, 6.0]): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14.G1pA6VpUbNo.jld2
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [4.0, 5.0, 6.0]): parameters changed.
+[ Info: target base at NamedTuple(): cache up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 4.0): parameters changed.
+[ Info: iteration solutions at (seed = 4.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=4.0.EWXe5G4FB3Z.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 4.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 4.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 4.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=3.14_seed=4.0.4XHk9VI5czL.jld2.
+[ Info: target ore at (p = 3.14, seed = 4.0): parameters changed.
+[ Info: !!! target ore at (p = 3.14, seed = 4.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 4.0): computing from deps.
+[ Info: iteration solutions at (p = 3.14, seed = 5.0): parameters changed.
+[ Info: iteration solutions at (seed = 5.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=5.0.230IfUT4MQy.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 5.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 5.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 5.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=3.14_seed=5.0.KFCTtJy5XEo.jld2.
+[ Info: target ore at (p = 3.14, seed = 5.0): parameters changed.
+[ Info: !!! target ore at (p = 3.14, seed = 5.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 5.0): computing from deps.
+[ Info: iteration solutions at (p = 3.14, seed = 6.0): parameters changed.
+[ Info: iteration solutions at (seed = 6.0,): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=6.0.FoXrrIT8wAW.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 6.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 6.0): parameters changed.
+[ Info: target ore at (p = 3.14, seed = 6.0): no backup at data\examples\sweep5\ore.CrdBumEWCwZ.dir\p=3.14_seed=6.0.9YzboOuffEc.jld2.
+[ Info: target ore at (p = 3.14, seed = 6.0): parameters changed.
+[ Info: !!! target ore at (p = 3.14, seed = 6.0): computing from deps.
+[ Info: !!! iteration solutions at Dict(:seed => 6.0): computing from deps.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\solutions.1YvXce9RGRZ.dir for result files.
+[ Info: Added 12 entries.
+[ Info: !!! target average at (p = 3.14, seed = [4.0, 5.0, 6.0]): computing from deps.
+[ Info: !!! iteration average.sweep at Dict{Symbol, Any}(:p => 3.14, :seed => [4.0, 5.0, 6.0]): computing from deps.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir for result files.
+[ Info: Added 4 entries.
+4×3 DataFrame
+ Row │ average   seed             p        
+     │ Float64?  Array…?          Float64?
+─────┼─────────────────────────────────────
+   1 │  38.8797  [4.0, 5.0, 6.0]      2.78
+   2 │  37.1943  [1.0, 2.0, 3.0]      2.78
+   3 │  39.0606  [4.0, 5.0, 6.0]      3.14
+   4 │  37.4171  [1.0, 2.0, 3.0]      3.14
 ```
 
 This output is rather verbose, but the important part are the lines containing `!!!`, indicating acutal  computations. Asking to make target `average` results in 9 computations: 1 copy of `base`, 3 of `ore` (for the 3 values of `seed`), 3 where `base` and `ore` are processed in the iterations for sweep `solution`, 1 for solution itself, which collects the information computed in its iterations, and finally one for the toplevel target `average`.
 
 Note that when explicitly making the sweep `solutions`, no new computations are triggered, since all required results are computed already by making `average`.
 
+The last two lines ask for `average` to be built w.r.t. a range of parameters. This could have been achieved by defining another `@sweep`, but because this scenario is so common, it is supported in this lightweight format as well. The `sweep` function used a heuristic to determine which of the keyword arguments are to be considered _atomic_ parameters, and which to be considered variable ranges. Iterable containers meant as parameters should be protected by boxing them in a `Ref`.
+
 Upon completion the contents of `DrWatson.datadir()` will look like this:
 
 ```
 └───examples
-    └───sweep4
-        │   average.p=3.14.2447376696785551322.jld2
-        │   base.8143066964374671252.jld2
-        │   ore.p=3.14_seed=1.0.10155953109734089458.jld2
-        │   ore.p=3.14_seed=2.0.9556143532797230738.jld2
-        │   ore.p=3.14_seed=3.0.16435246169964622506.jld2
-        │   solutions.p=3.14.2188912756489576653.jld2
-        │
-        └───solutions.p=3.14.6542551602648920450.dir
-                seed=1.0.10313548746577572791.jld2
-                seed=2.0.967288288172012261.jld2
-                seed=3.0.16301960159939599385.jld2
+    ├───algo1
+    │   ├───algo.5Y5boI4Y5YW.dir
+    │   └───algo.GElrzKDPE2t.dir
+    ├───hello
+    │   ├───A.17171136936184495823.dir
+    │   ├───B.12519468891243541516.dir
+    │   ├───B.13395166280708594831.dir
+    │   ├───C.15360683730267352014.dir
+    │   ├───C.17987775898662511959.dir
+    │   ├───D.17289309569934157171.dir
+    │   └───D.3868354253241197441.dir
+    ├───inputs1
+    │   └───input.BrKrFd0kr39.dir
+    ├───inputs2
+    │   └───input.FcfX3HzrEjm.dir
+    ├───params
+    │   ├───A.1048535322258453061.dir
+    │   ├───B.14336788928509918508.dir
+    │   ├───B.15488351015771593206.dir
+    │   ├───C.12735428060590766293.dir
+    │   ├───C.16190114322375790387.dir
+    │   ├───D.13619359724233510674.dir
+    │   └───D.6579483135526923798.dir
+    ├───params2
+    │   ├───A.15245690565313990735.dir
+    │   ├───B.478396206930035304.dir
+    │   └───C.16138613138270301665.dir
+    ├───params3
+    │   ├───A.12993895845110424235.dir
+    │   ├───B.7233780367540734804.dir
+    │   └───C.7665541436761705068.dir
+    ├───params4
+    │   ├───A.15245690565313990735.dir
+    │   ├───B.498605587738026360.dir
+    │   └───C.4656133660043096536.dir
+    ├───sweep
+    │   ├───average.6927412273851932204.dir
+    │   └───solutions.2021731420090844376.dir
+    ├───sweep2
+    │   ├───average.8556888268172572070.dir
+    │   ├───ore.1675915613269632117.dir
+    │   └───solutions.6874929957534190746.dir
+    ├───sweep3
+    │   ├───average.3661881455838019953.dir
+    │   ├───ore.3808047874501286615.dir
+    │   └───solutions.1452067140952804965.dir
+    ├───sweep4
+    │   ├───average.15216166707148747960.dir
+    │   ├───base.9954312946933418887.dir
+    │   ├───ore.1675915613269632117.dir
+    │   └───solutions.10230478802174878851.dir
+    └───sweep5
+        ├───average.63678zPY2rK.dir
+        ├───average.sweep.6Lh9bApq4vd.dir
+        ├───base.BrKrFd0kr39.dir
+        ├───ore.CrdBumEWCwZ.dir
+        └───solutions.1YvXce9RGRZ.dir
 ```
 
 A second run of the scripts results in:
 
 ```
-[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache is up-to-date.
-x = make(average; seed = [1.0, 2.0, 3.0], p = 3.14) = 35.146264369941974
-[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache is up-to-date.
-y = make(solutions; seed = [1.0, 2.0, 3.0], p = 3.14) = 3×3 DataFrame
- Row │ sol       p         seed
-     │ Float64?  Float64?  Float64?
-─────┼──────────────────────────────
-   1 │  11.4142      3.14       1.0
-   2 │  11.7321      3.14       2.0
-   3 │  12.0         3.14       3.0
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.63678zPY2rK.dir\p=3.14.CoXCiMub8Ro.jld2.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache up-to-date.
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): parameters changed.
+[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14.DxZMoriX5cF.jld2
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): parameters changed.
+[ Info: target base at NamedTuple(): cache up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 1.0): parameters changed.
+[ Info: iteration solutions at (seed = 1.0,): read data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=1.0.4a4MWlZncdu.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 1.0): up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 2.0): parameters changed.
+[ Info: iteration solutions at (seed = 2.0,): read data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=2.0.K7yRD6aDT1W.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 2.0): up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 3.0): parameters changed.
+[ Info: iteration solutions at (seed = 3.0,): read data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=3.0.5ykZTSxVHcI.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 3.0): up-to-date.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\solutions.1YvXce9RGRZ.dir for result files.
+[ Info: Added 12 entries.
+[ Info: Sweep average.sweep at Dict(:p => [2.78, 3.14], :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: sweep average.sweep at (p = [2.78, 3.14], seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\Ed6y2mjGtoh.jld2
+[ Info: Sweep average.sweep at Dict(:p => [2.78, 3.14], :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 2.78): cache empty.
+[ Info: iteration average.sweep at (p = 2.78,): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.J7GFC87U3Fh.jld2
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 2.78): up-to-date.
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 3.14): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14,): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.824AT3Qr5iR.jld2
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 3.14): up-to-date.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir for result files.
+[ Info: Added 4 entries.
+[ Info: Sweep average.sweep at Dict{Symbol, Vector}(:p => [2.78, 3.14], :seed => [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): cache empty.
+[ Info: sweep average.sweep at (p = [2.78, 3.14], seed = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\43CGkbnRcMc.jld2
+[ Info: Sweep average.sweep at Dict{Symbol, Vector}(:p => [2.78, 3.14], :seed => [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): cache empty.
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): cache empty.
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.J7GFC87U3Fh.jld2
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.824AT3Qr5iR.jld2
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.7OlQWfYVHko.jld2
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.4fg2RrLKQ4G.jld2
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): up-to-date.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir for result files.
+[ Info: Added 4 entries.
+4×3 DataFrame
+ Row │ average   seed             p        
+     │ Float64?  Array…?          Float64?
+─────┼─────────────────────────────────────
+   1 │  38.8797  [4.0, 5.0, 6.0]      2.78
+   2 │  37.1943  [1.0, 2.0, 3.0]      2.78
+   3 │  39.0606  [4.0, 5.0, 6.0]      3.14
+   4 │  37.4171  [1.0, 2.0, 3.0]      3.14
 ```
 
 This time around, no computations were performed at all!
@@ -142,19 +373,61 @@ Let's kill julia and run the file again:
 
 ```
 [ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache empty.
-[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): loaded from data\examples\sweep4\average.p=3.14.2447376696785551322.jld2.
-[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache is up-to-date.
-x = make(average; seed = [1.0, 2.0, 3.0], p = 3.14) = 35.146264369941974
-[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): not cached in memory.
-[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): loaded from data\examples\sweep4\solutions.p=3.14.2188912756489576653.jld2
-[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache is up-to-date.
-y = make(solutions; seed = [1.0, 2.0, 3.0], p = 3.14) = 3×3 DataFrame
- Row │ sol       p         seed
-     │ Float64?  Float64?  Float64?
-─────┼──────────────────────────────
-   1 │  11.4142      3.14       1.0
-   2 │  11.7321      3.14       2.0
-   3 │  12.0         3.14       3.0
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.63678zPY2rK.dir\p=3.14.CoXCiMub8Ro.jld2.
+[ Info: target average at (p = 3.14, seed = [1.0, 2.0, 3.0]): cache up-to-date.
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: sweep solutions at (p = 3.14, seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14.DxZMoriX5cF.jld2
+[ Info: Sweep solutions at Dict{Symbol, Any}(:p => 3.14, :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: target base at NamedTuple(): cache empty.
+[ Info: target base at NamedTuple(): read data\examples\sweep5\base.BrKrFd0kr39.dir\9hXKeOK7BYa.jld2.
+[ Info: target base at NamedTuple(): cache up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 1.0): cache empty.
+[ Info: iteration solutions at (seed = 1.0,): read data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=1.0.4a4MWlZncdu.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 1.0): up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 2.0): parameters changed.
+[ Info: iteration solutions at (seed = 2.0,): read data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=2.0.K7yRD6aDT1W.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 2.0): up-to-date.
+[ Info: iteration solutions at (p = 3.14, seed = 3.0): parameters changed.
+[ Info: iteration solutions at (seed = 3.0,): read data\examples\sweep5\solutions.1YvXce9RGRZ.dir\p=3.14_seed=3.0.5ykZTSxVHcI.jld2
+[ Info: iteration solutions at (p = 3.14, seed = 3.0): up-to-date.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\solutions.1YvXce9RGRZ.dir for result files.
+[ Info: Added 12 entries.
+[ Info: Sweep average.sweep at Dict(:p => [2.78, 3.14], :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: sweep average.sweep at (p = [2.78, 3.14], seed = [1.0, 2.0, 3.0]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\Ed6y2mjGtoh.jld2
+[ Info: Sweep average.sweep at Dict(:p => [2.78, 3.14], :seed => [1.0, 2.0, 3.0]): cache empty.
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 2.78): cache empty.
+[ Info: iteration average.sweep at (p = 2.78,): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.J7GFC87U3Fh.jld2
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 2.78): up-to-date.
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 3.14): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14,): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.824AT3Qr5iR.jld2
+[ Info: iteration average.sweep at (seed = [1.0, 2.0, 3.0], p = 3.14): up-to-date.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir for result files.
+[ Info: Added 4 entries.
+[ Info: Sweep average.sweep at Dict{Symbol, Vector}(:p => [2.78, 3.14], :seed => [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): cache empty.
+[ Info: sweep average.sweep at (p = [2.78, 3.14], seed = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): no backup at data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\43CGkbnRcMc.jld2
+[ Info: Sweep average.sweep at Dict{Symbol, Vector}(:p => [2.78, 3.14], :seed => [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]): cache empty.
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): cache empty.
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.J7GFC87U3Fh.jld2
+[ Info: iteration average.sweep at (p = 2.78, seed = [1.0, 2.0, 3.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.824AT3Qr5iR.jld2
+[ Info: iteration average.sweep at (p = 3.14, seed = [1.0, 2.0, 3.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=2.78.7OlQWfYVHko.jld2
+[ Info: iteration average.sweep at (p = 2.78, seed = [4.0, 5.0, 6.0]): up-to-date.
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): parameters changed.
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): read data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir\p=3.14.4fg2RrLKQ4G.jld2
+[ Info: iteration average.sweep at (p = 3.14, seed = [4.0, 5.0, 6.0]): up-to-date.
+[ Info: Scanning folder c:\Users\krcools\.julia\dev\Makeitso\data\examples\sweep5\average.sweep.6Lh9bApq4vd.dir for result files.
+[ Info: Added 4 entries.
+4×3 DataFrame
+ Row │ average   seed             p        
+     │ Float64?  Array…?          Float64?
+─────┼─────────────────────────────────────
+   1 │  38.8797  [4.0, 5.0, 6.0]      2.78
+   2 │  37.1943  [1.0, 2.0, 3.0]      2.78
+   3 │  39.0606  [4.0, 5.0, 6.0]      3.14
+   4 │  37.4171  [1.0, 2.0, 3.0]      3.14
 ```
 
 Now, all information has to be loaded from disk, but no new computations were required, since these have been done in the previous session.

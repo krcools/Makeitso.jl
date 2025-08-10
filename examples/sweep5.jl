@@ -27,8 +27,8 @@ end
     sum(solutions.sol)
 end
 
-@show x = make(average; seed=[1.0,2.0,3.0], p=3.14)
-@show y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
+x = make(average; seed=[1.0,2.0,3.0], p=3.14)
+y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
 
 z1 = sweep(average; seed=Ref([1.0,2.0,3.0]), p=[2.78, 3.14])
 z2 = sweep(average; seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])
