@@ -1,3 +1,7 @@
+# Version 2.1
+
+- Support parameter transformation. This allows a single target to be built against different parameter values. It is now even possible to on one hand build a sweep and on the other hand build a single instantiation. The motivating example is convergence analyysis for numerical methods. This requires a reference solution that plays a distinct role in the build process. See `examples/errors.jl` for how to use this feature.
+
 # Version 2.0
 
 - Support for the very common case of sweeps for a top level target without the necessity to make an explicit `Sweep`.

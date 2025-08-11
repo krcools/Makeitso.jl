@@ -1,7 +1,7 @@
 name = "Makeitso"
 uuid = "5616b7aa-48d8-5ba3-83fe-06b58d5edc20"
 authors = ["Kristof Cools <krcools@gmail.com> and contributors"]
-version = "2.0.0"
+version = "2.1.0"
 
 [deps]
 BakerStreet = "79c3fcf7-ab10-4df2-b330-e2e1bedd9b25"
