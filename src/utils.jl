@@ -187,23 +187,23 @@ function add_kwargs_to_args!(tp)
 end
 
 
-function append_deps_parameter_keys!(target::Target, parameter_keys)
+function append_deps_parameter_keys!(target::Target, par_keys)
     for dep in target.deps
-        append!(parameter_keys, dep.parameter_keys)
+        append!(par_keys, dep.par_keys)
     end
-    unique!(parameter_keys)
-    return parameter_keys
+    unique!(par_keys)
+    return par_keys
 end
 
-function append_deps_parameter_keys!(target::Sweep, parameter_keys)
+function append_deps_parameter_keys!(target::Sweep, par_keys)
     for dep in target.shared_deps
-        append!(parameter_keys, dep.parameter_keys)
+        append!(par_keys, dep.par_keys)
     end
     for dep in target.iteration_deps
-        append!(parameter_keys, dep.parameter_keys)
+        append!(par_keys, dep.par_keys)
     end
-    unique!(parameter_keys)
-    return parameter_keys
+    unique!(par_keys)
+    return par_keys
 end
 
 

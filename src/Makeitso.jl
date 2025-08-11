@@ -23,8 +23,9 @@ mutable struct Target
     relpath
     params
     tree_hash
-    parameter_keys
+    par_keys
     mem_only
+    par_tfs
 end
 
 mutable struct Sweep
@@ -43,7 +44,7 @@ mutable struct Sweep
     iteration_parameters
     iteration_timestamps
     tree_hash
-    parameter_keys
+    par_keys
 end
 
 include("utils.jl")
@@ -54,7 +55,7 @@ end
 
 
 function make(target::Target, level=0; kwargs...)
-    kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.parameter_keys))
+    kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.par_keys))
 
     if cache_uptodate(target; parameters=kwargs)
         return target.cache
@@ -66,8 +67,12 @@ function make(target::Target, level=0; kwargs...)
         return target.cache
     end
 
-    for t in target.deps
-        make(t, level+1; kwargs...)
+    # @show kwargs
+
+    for (t,tf) in zip(target.deps, target.par_tfs)
+        kws = tf === nothing ? kwargs : tf(;kwargs...)
+        # @show kws
+        make(t, level+1; kws...)
     end
 
     update!(target; kwargs...)
@@ -78,7 +83,7 @@ end
 
 function make(sweep::Sweep, level=0; kwargs...)
 
-    kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.parameter_keys || k in sweep.variable_keys))
+    kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.par_keys || k in sweep.variable_keys))
     parameters = Dict((k,v) for (k,v) in kwargs if !(k in sweep.variable_keys))
     configs = DrWatson.dict_list(Dict((s, kwargs[s]) for s in sweep.variable_keys))
 
@@ -210,8 +215,10 @@ macro target(args...)
 
     file_name = String(out) * ".jld2"
 
-    tnames = []
-    parameter_keys = []
+    deps = []
+    par_keys = []
+    par_kws = []
+    par_tfs = []
 
     # treat the special case of a single argument
     if recipe.args[1] isa Symbol
@@ -220,13 +227,21 @@ macro target(args...)
 
     tp = recipe.args[1]
     @assert tp.head == :tuple
-    for arg in tp.args
+    for (i,arg) in pairs(tp.args)
         if arg isa Symbol
-            push!(tnames, esc(arg))
+            push!(deps, esc(arg))
+            push!(par_kws, nothing)
+        elseif arg isa Expr && arg.head == :call
+            tname = arg.args[1]
+            @assert arg.args[2] isa Expr && arg.args[2].head == :parameters
+            kws = arg.args[2].args
+            push!(deps, esc(tname))
+            push!(par_kws, kws)
+            tp.args[i] = tname
         elseif arg isa Expr && arg.head == :parameters
                 for p in arg.args
                     if p isa Symbol
-                        push!(parameter_keys, p)
+                        push!(par_keys, p)
                     else
                         error("Unexpected parameter in target definition: $p")
                     end
@@ -235,6 +250,32 @@ macro target(args...)
             error("Unexpected argument in target definition: $arg")
         end
     end
+
+
+
+    # build the keyword transformation expressions
+    for (i, tname) in pairs(deps)
+        kws = par_kws[i]
+        if kws == nothing
+            push!(par_tfs, nothing)
+            continue
+        end
+        xp = :( (;$(par_keys...), kwargs...) -> (;$(par_keys...), kwargs..., $(kws...) ))
+        push!(par_tfs, esc(xp))
+    end
+
+
+    # @show out
+    # @show tp
+    # @show deps
+    # @show par_keys
+    # @show par_kws
+    # for tf in par_tfs
+    #     @show tf
+    # end
+    # println()
+
+    # body = :( ($(par_keys...), kwargs...) -> (;$(par_keys...), kwargs..., $(kws...)) )
 
     # add kwargs... to the argument list
     tp = add_kwargs_to_args!(tp)
@@ -251,7 +292,7 @@ macro target(args...)
             if $recipe_hash != $(esc(out)).hash
                 @assert typeof($(esc(out))) <: Target "Target $(esc(out)) musn't be redefined as a different type."
                 $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
-                $(esc(out)).deps = [$(tnames...)]
+                $(esc(out)).deps = [$(deps...)]
                 $(esc(out)).recipe = $(esc(recipe))
                 $(esc(out)).timestamp = 0.0
                 $(esc(out)).cache = nothing
@@ -259,15 +300,16 @@ macro target(args...)
                 $(esc(out)).hash = $recipe_hash
                 $(esc(out)).relpath = $path
                 $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
-                $(esc(out)).parameter_keys = $(parameter_keys)
+                $(esc(out)).par_keys = $(par_keys)
                 $(esc(out)).mem_only = $memonly
-                append_deps_parameter_keys!($(esc(out)), $(parameter_keys))
+                $(esc(out)).par_tfs = [$(par_tfs...)]
+                append_deps_parameter_keys!($(esc(out)), $(par_keys))
             end
         end
     else
         xp = quote
             $(esc(out)) = Target(
-                [$(tnames...)],
+                [$(deps...)],
                 $(esc(recipe)),
                 0.0,
                 nothing,
@@ -276,10 +318,11 @@ macro target(args...)
                 $path,
                 nothing,
                 zero(UInt64),
-                $(parameter_keys),
+                $(par_keys),
                 $(memonly),
+                [$(par_tfs...)]
                 )
-            append_deps_parameter_keys!($(esc(out)), $(esc(out)).parameter_keys)
+            append_deps_parameter_keys!($(esc(out)), $(esc(out)).par_keys)
             $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
         end
     end
@@ -297,7 +340,7 @@ macro sweep(out, recipe)
     shared_deps = []
     iteration_deps = []
     variable_keys = []
-    parameter_keys = []
+    par_keys = []
 
     # process the dependency specification: sort out parameters and variables,
     # shared deps and iteration deps
@@ -311,7 +354,7 @@ macro sweep(out, recipe)
                     push!(variable_keys, QuoteNode(p.args[1]))
                     arg.args[j] = p.args[1]
                 elseif p isa Symbol
-                    push!(parameter_keys, p)
+                    push!(par_keys, p)
                 else
                     error("Unexpected parameter in sweep definition: $p")
                 end
@@ -348,8 +391,8 @@ macro sweep(out, recipe)
                 $(esc(out)).iteration_parameters = nothing
                 $(esc(out)).iteration_timestamps = []
                 $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)) , hash(nothing))
-                $(esc(out)).parameter_keys = $(parameter_keys)
-                append_deps_parameter_keys!($(esc(out)), $(parameter_keys))
+                $(esc(out)).par_keys = $(par_keys)
+                append_deps_parameter_keys!($(esc(out)), $(par_keys))
                 # full_path = Makeitso.sweep_fullpath($(esc(out)))
                 # isfile(full_path) && rm(full_path)
             end
@@ -377,9 +420,9 @@ macro sweep(out, recipe)
                 nothing,
                 [],
                 zero(Int64),
-                $(parameter_keys),
+                $(par_keys),
             )
-            append_deps_parameter_keys!($(esc(out)), $(esc(out)).parameter_keys)
+            append_deps_parameter_keys!($(esc(out)), $(esc(out)).par_keys)
             $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
         end
     end
@@ -452,9 +495,9 @@ function sweep(t::Target; kwargs...)
         nothing, # iteration_parameters
         [], # iteration_timestamps
         zero(UInt64), # tree_hash
-        par_keys, # parameter_keys
+        par_keys, # par_keys
     )
-    append_deps_parameter_keys!(sweep, sweep.parameter_keys)
+    append_deps_parameter_keys!(sweep, sweep.par_keys)
     sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
 
     df = make(sweep; vars..., params...)
