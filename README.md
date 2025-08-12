@@ -49,7 +49,7 @@ z1 = sweep(average; seed=Ref([1.0,2.0,3.0]), p=[2.78, 3.14])
 z2 = sweep(average; seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])
 ```
 
-The toplevel `@target` is `average`, which computes the sum of all entries in the column `sol` of the `DataFrame` computed by the `@sweep` `solutions`. The `@sweep` `solutions` has two dependencies: one named `base` which is shared among all iterations (which should and will only be computed once), and another named `ore` which depends on the swept over variable `seed`. Iteration specific dependencies are declared by an exclamation mark.
+The toplevel `@target` is `average`, which computes the sum of all entries in the column `sol` of the `DataFrame` computed by the `@sweep` `solutions`. The `@sweep` `solutions` has two dependencies: one named `base` which is shared among all iterations (which should and will only be computed once), and another named `ore` which depends on the swept over variable `seed`. Iteration specific dependencies are declared by an exclamation mark. **Important**: Currently, all shared dependencies must preceed all iteration specific dependencies in the dependency declaration list.
 
 The last two lines ask for `average` to be built w.r.t. a range of parameters. This could have been achieved by defining another `@sweep`, but because this scenario is so common, it is supported in this lightweight format as well. The `sweep` function used a heuristic to determine which of the keyword arguments are to be considered _atomic_ parameters, and which to be considered variable ranges. Iterable containers meant as parameters should be protected by boxing them in a `Ref`.
 
