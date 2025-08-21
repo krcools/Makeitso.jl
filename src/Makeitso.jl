@@ -58,12 +58,14 @@ function make(target::Target, level=0; kwargs...)
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.par_keys))
 
     if cache_uptodate(target; parameters=kwargs)
+        @info "[$level] target $(target.name) at $(NamedTuple(kwargs)) retrieved from cache."
         return target.cache
     end
 
-    try_loading(target, kwargs)
+    try_loading(target, level, kwargs)
 
     if cache_uptodate(target; parameters=kwargs)
+        @info "[$level] target $(target.name) at $(NamedTuple(kwargs)) retrieved from disk."
         return target.cache
     end
 
@@ -75,7 +77,7 @@ function make(target::Target, level=0; kwargs...)
         make(t, level+1; kws...)
     end
 
-    update!(target; kwargs...)
+    update!(target, level; kwargs...)
 
     return target.cache
 end
@@ -87,9 +89,15 @@ function make(sweep::Sweep, level=0; kwargs...)
     parameters = Dict((k,v) for (k,v) in kwargs if !(k in sweep.variable_keys))
     configs = DrWatson.dict_list(Dict((s, kwargs[s]) for s in sweep.variable_keys))
 
-    cache_uptodate(sweep; parameters=kwargs) && return sweep.cache
-    try_loading(sweep, kwargs)
-    cache_uptodate(sweep; parameters=kwargs) && return sweep.cache
+    if cache_uptodate(sweep; parameters=kwargs)
+        @info "[$level] sweep $(sweep.name) at $(NamedTuple(kwargs)) retrieved from cache."
+        return sweep.cache
+    end
+    try_loading(sweep, level, kwargs)
+    if cache_uptodate(sweep; parameters=kwargs)
+        @info "[$level] sweep $(sweep.name) at $(NamedTuple(kwargs)) retrieved from disk."
+        return sweep.cache
+    end
 
     for t in sweep.shared_deps
         make(t, level+1; parameters...)
@@ -98,29 +106,35 @@ function make(sweep::Sweep, level=0; kwargs...)
     sweep.iteration_timestamps = []
     for variables in configs
 
-        iteration_cache_uptodate(sweep; parameters..., variables...) && continue
-        try_loading_iteration(sweep, variables, parameters)
-        iteration_cache_uptodate(sweep; parameters..., variables...) && continue
+        if iteration_cache_uptodate(sweep; parameters..., variables...)
+            @info "[$level] iteration $(sweep.name) at $(NamedTuple(variables)) retrieved from cache."
+            continue
+        end
+        try_loading_iteration(sweep, level, variables, parameters)
+        if iteration_cache_uptodate(sweep; parameters..., variables...)
+            @info "[$level] iteration $(sweep.name) at $(NamedTuple(variables)) retrieved from disk."
+            continue
+        end
 
         for t in sweep.iteration_deps
             make(t, level+1; parameters..., variables...)
         end
 
-        iteration_update!(sweep, variables, parameters)
+        iteration_update!(sweep, level, variables, parameters)
     end
 
-    sweep_update!(sweep, configs, kwargs, parameters)
+    sweep_update!(sweep, level, configs, kwargs, parameters)
     return sweep.cache
 end
 
 
-function sweep_update!(sweep, variables_list, parameters, nonvariables)
+function sweep_update!(sweep, level, variables_list, parameters, nonvariables)
 
     fullpath = target_fullpath(sweep, parameters)
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
-    # @info "!!! sweep $(sweep.name) at $(parameters): computing from deps."
+    @info "[$level] !!! sweep $(sweep.name) at $(parameters): computing from deps."
     df = loadsims(iteration_dirname(sweep, nothing), variables_list, nonvariables)
     select!(df, Not([:timestamp, :hash, :path, :params, :tree_hash]))
 
@@ -137,7 +151,7 @@ function sweep_update!(sweep, variables_list, parameters, nonvariables)
     #     "tree_hash" => sweep.tree_hash))
 end
 
-function iteration_update!(sweep, variables, parameters)
+function iteration_update!(sweep, level, variables, parameters)
 
     fullpath = iteration_fullpath(sweep, variables, parameters)
     mkpath(dirname(fullpath))
@@ -145,7 +159,7 @@ function iteration_update!(sweep, variables, parameters)
     shared_deps_vals = [t.cache for t in sweep.shared_deps]
     iteration_deps_vals = [t.cache for t in sweep.iteration_deps]
 
-    @info "!!! iteration $(sweep.name) at $(variables): computing from deps."
+    @info "[$level] !!! iteration $(sweep.name) at $(variables): computing from deps."
     sweep.iteration_cache = sweep.recipe(
         shared_deps_vals...,
         iteration_deps_vals...,
@@ -168,12 +182,12 @@ function iteration_update!(sweep, variables, parameters)
     jldsave(fullpath; dct...)
 end
 
-function update!(target::Target; kwargs...)
+function update!(target::Target, level; kwargs...)
 
     fullpath = target_fullpath(target, kwargs)
     mkpath(dirname(fullpath))
 
-    @info "!!! target $(target.name) at $(NamedTuple(kwargs)): computing from deps."
+    @info "[$level] !!! target $(target.name) at $(NamedTuple(kwargs)): computing from deps."
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
     target.timestamp = time()
