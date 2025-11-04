@@ -257,6 +257,13 @@ macro target(args...)
         recipe.args[1] = Expr(:tuple, recipe.args[1])
     end
 
+    # treat the special  case (A;h)
+    if recipe.args[1].head == :block
+        Base.remove_linenums!(recipe.args[1])
+        @assert length(recipe.args[1].args) == 2
+        recipe.args[1] = Expr(:tuple, Expr(:parameters, recipe.args[1].args[2]), recipe.args[1].args[1])
+    end
+
     tp = recipe.args[1]
     @assert tp.head == :tuple
     for (i,arg) in pairs(tp.args)
@@ -295,19 +302,6 @@ macro target(args...)
         xp = :( (;$(par_keys...), kwargs...) -> (;$(par_keys...), kwargs..., $(kws...) ))
         push!(par_tfs, esc(xp))
     end
-
-
-    # @show out
-    # @show tp
-    # @show deps
-    # @show par_keys
-    # @show par_kws
-    # for tf in par_tfs
-    #     @show tf
-    # end
-    # println()
-
-    # body = :( ($(par_keys...), kwargs...) -> (;$(par_keys...), kwargs..., $(kws...)) )
 
     # add kwargs... to the argument list
     tp = add_kwargs_to_args!(tp)
@@ -373,6 +367,18 @@ macro sweep(out, recipe)
     iteration_deps = []
     variable_keys = []
     par_keys = []
+
+    # treat the special  case (A;h)
+    if recipe.args[1].head == :block
+        Base.remove_linenums!(recipe.args[1])
+        @assert length(recipe.args[1].args) == 2
+        @assert recipe.args[1].args[2] isa Expr
+        @assert recipe.args[1].args[2].head == :(=)
+        k = recipe.args[1].args[2].args[1]
+        v = :( [] )
+        recipe.args[1] = Expr(:tuple, Expr(:parameters, Expr(:kw, k, v)), recipe.args[1].args[1])
+    end
+    # @show recipe.args[1]
 
     # process the dependency specification: sort out parameters and variables,
     # shared deps and iteration deps
