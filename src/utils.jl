@@ -60,12 +60,13 @@ end
 #     return joinpath(sweep_dirname(sweep), String(sweep.name) * ".jld2")
 # end
 
-function iteration_dirname(sweep, parameters)
-    return joinpath(DrWatson.datadir(sweep.relpath), sweep.name * "." * fn_pars_hash(sweep, parameters) * ".dir")
-end
+# function iteration_dirname(sweep, parameters)
+#     return joinpath(DrWatson.datadir(sweep.relpath), sweep.name * "." * fn_pars_hash(sweep, parameters) * ".dir")
+# end
 
 function iteration_fullpath(sweep, variables_dict, parameters_dict)
-    joinpath(iteration_dirname(sweep, nothing), fn_pars_hash(sweep, merge(parameters_dict, variables_dict)) * ".jld2")
+    # joinpath(iteration_dirname(sweep, nothing), fn_pars_hash(sweep, merge(parameters_dict, variables_dict)) * ".jld2")
+    joinpath(target_dirname(sweep), fn_pars_hash(sweep, merge(parameters_dict, variables_dict)) * ".jld2")
 end
 
 function iteration_cache_uptodate(sweep; kwargs...)
