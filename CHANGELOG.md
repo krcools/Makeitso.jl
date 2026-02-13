@@ -1,3 +1,11 @@
+# Version 2.2.1
+
+- Expand colorscheme: blue is cached, purple is on-disk, amber is compute.
+
+# Version 2.2
+
+= Fix parsing issues on Julia 1.12
+
 # Version 2.1
 
 - Support parameter transformation. This allows a single target to be built against different parameter values. It is now even possible to on one hand build a sweep and on the other hand build a single instantiation. The motivating example is convergence analyysis for numerical methods. This requires a reference solution that plays a distinct role in the build process. See `examples/errors.jl` for how to use this feature.
