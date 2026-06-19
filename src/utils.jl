@@ -2,6 +2,9 @@ function target_hash(target::Target, h=hash(nothing))
     for d in target.deps
         h = target_hash(d, h)
     end
+    for d in target.weak_deps
+        h = target_hash(d, h)
+    end
     h = hash(target.hash, h)
     return h
 end
@@ -12,6 +15,9 @@ function target_hash(target::Sweep, h=hash(nothing))
         h = target_hash(d, h)
     end
     for d in target.iteration_deps
+        h = target_hash(d, h)
+    end
+        for d in target.weak_deps
         h = target_hash(d, h)
     end
     h = hash(target.hash, h)

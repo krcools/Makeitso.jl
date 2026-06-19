@@ -8,7 +8,7 @@ end
     A * 2
 end
 
-@sweep C (!B, ;h = H) -> begin
+@sweep C (!B, ;h = []) -> begin
     @show h
     (;sol=sqrt(B))
 end

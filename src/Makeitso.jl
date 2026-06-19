@@ -19,13 +19,18 @@ mutable struct Target
     timestamp
     cache
     name
-    hash
+    hash      # hash of the current recipe
     relpath
-    params
-    tree_hash
-    par_keys
+    params    # parameter values at which the cache was computed
+    tree_hash # recipe tree hash at which the cache was computed. This should
+              # be recursively computed from the recipe hash and those of its
+              # dependencies, including weak dependencies.
+    par_keys  # vector of symbols corresponding to the keyword parameters of the
+              # target and all its depenedencies. Used to filter the kwargs
+              # passed to make() to only those relevant for the target.
     mem_only
     par_tfs
+    weak_deps
 end
 
 mutable struct Sweep
@@ -41,10 +46,11 @@ mutable struct Sweep
     parameters
     iteration_cache
     iteration_timestamp
-    iteration_parameters
+    iteration_parameters # iteration parameters at which the iteration_cache was computed
     iteration_timestamps
-    tree_hash
-    par_keys
+    tree_hash # recipe tree hash at which the iteration_cache was computed
+    par_keys # which keyword correspond to parameters that do not vary across iterations
+    weak_deps
 end
 
 include("utils.jl")
@@ -57,7 +63,6 @@ end
 function make(target::Target, level=0; kwargs...)
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.par_keys))
 
-    # pfx = "⎵"^level
     pfx = ""
     @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)):"
 
@@ -67,20 +72,16 @@ function make(target::Target, level=0; kwargs...)
     end
 
     try_loading(target, level, kwargs)
-
     if cache_uptodate(target; parameters=kwargs)
         @info "\e[35m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
         return target.cache
     end
-
-    # @show kwargs
 
     for (t,tf) in zip(target.deps, target.par_tfs)
         kws = tf === nothing ? kwargs : tf(;kwargs...)
         # @show kws
         make(t, level+1; kws...)
     end
-
     update!(target, level; kwargs...)
 
     return target.cache
@@ -179,7 +180,8 @@ function iteration_update!(sweep, level, variables, parameters)
     sweep.iteration_cache = sweep.recipe(
         shared_deps_vals...,
         iteration_deps_vals...,
-        ; variables..., parameters...)
+        sweep.weak_deps...;
+        variables..., parameters...)
     sweep.iteration_timestamp = time()
     sweep.iteration_parameters = merge(variables, parameters)
     sweep.tree_hash = target_hash(sweep, hash(nothing))
@@ -200,14 +202,13 @@ end
 
 function update!(target::Target, level; kwargs...)
 
-    pfx = "⎵"^(level)
     pfx = ""
     fullpath = target_fullpath(target, kwargs)
     mkpath(dirname(fullpath))
 
     @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): computing from deps!"
     target.params = kwargs
-    target.cache = target.recipe(getfield.(target.deps, :cache)...; kwargs...)
+    target.cache = target.recipe(getfield.(target.deps, :cache)..., target.weak_deps...; kwargs...)
     target.timestamp = time()
     target.tree_hash = target_hash(target, hash(nothing))
     target.mem_only && return
@@ -227,6 +228,7 @@ end
 
 macro target(args...)
 
+    # extract the options, output name and recipe from the macro arguments
     if length(args) == 2
         options = :(memonly=false)
         out = args[1]
@@ -245,39 +247,41 @@ macro target(args...)
     @assert out isa Symbol
     @assert recipe.head == :->
 
-    file_name = String(out) * ".jld2"
-
-    deps = []
-    par_keys = []
-    par_kws = []
-    par_tfs = []
-
-    # treat the special case of a single argument
+    # treat the special case (A), transform to (A,)
     if recipe.args[1] isa Symbol
         recipe.args[1] = Expr(:tuple, recipe.args[1])
     end
 
-    # treat the special  case (A;h)
+    # treat the special case (A;h), transform to (A,;h)
     if recipe.args[1].head == :block
         Base.remove_linenums!(recipe.args[1])
         @assert length(recipe.args[1].args) == 2
         recipe.args[1] = Expr(:tuple, Expr(:parameters, recipe.args[1].args[2]), recipe.args[1].args[1])
     end
 
-    tp = recipe.args[1]
+    deps = []
+    weak_deps = []
+    par_keys = []
+    par_kws = [] 
+
+    tp = recipe.args[1] # e.g. tp == :((A, B(;q=2h), ;h, p))
     @assert tp.head == :tuple
     for (i,arg) in pairs(tp.args)
-        if arg isa Symbol
+        if arg isa Symbol # e.g. arg == :A
             push!(deps, esc(arg))
             push!(par_kws, nothing)
-        elseif arg isa Expr && arg.head == :call
-            tname = arg.args[1]
+        elseif arg isa Expr && arg.head == :call && arg.args[1] == :~
+            weak_dep = arg.args[2]
+            push!(weak_deps, esc(weak_dep))
+            tp.args[i] = weak_dep
+        elseif arg isa Expr && arg.head == :call # e.g. arg == :(B(;q=2h))
+            tname = arg.args[1] # e.g. tname == :B
             @assert arg.args[2] isa Expr && arg.args[2].head == :parameters
-            kws = arg.args[2].args
+            kws = arg.args[2].args # e.g. kws == [Expr(:kw, :q, :(2h))]
             push!(deps, esc(tname))
             push!(par_kws, kws)
-            tp.args[i] = tname
-        elseif arg isa Expr && arg.head == :parameters
+            tp.args[i] = tname # arg == :B
+        elseif arg isa Expr && arg.head == :parameters # e.g. arg == Expr(:parameters, :h, :p)
                 for p in arg.args
                     if p isa Symbol
                         push!(par_keys, p)
@@ -290,11 +294,14 @@ macro target(args...)
         end
     end
 
-
+    # deps     == [:A, :B]
+    # par_kws  == [nothing, [Expr(:kw, :q, :(2h))]]
+    # par_keys == [:h, :p]
 
     # build the keyword transformation expressions
+    par_tfs = [] # expressions to transform the kwargs for the target into kwargs for the dependencies
     for (i, tname) in pairs(deps)
-        kws = par_kws[i]
+        kws = par_kws[i] # e.g. kws == [Expr(:kw, :q, :(2h))]
         if kws == nothing
             push!(par_tfs, nothing)
             continue
@@ -302,14 +309,16 @@ macro target(args...)
         xp = :( (;$(par_keys...), kwargs...) -> (;$(par_keys...), kwargs..., $(kws...) ))
         push!(par_tfs, esc(xp))
     end
+    # e.g. par_tfs = [ nothing, :( (;h, p, kwargs...) -> (;h, p, kwargs..., q=2h) ) ]
 
-    # add kwargs... to the argument list
+    # add kwargs... to the argument list to accept parameters for dependencies
     tp = add_kwargs_to_args!(tp)
+    # e.g tp == :((A, B, ;h, p, kwargs...))
 
-    fn = string(__source__.file)
-    rp = dirname(relpath(fn, projectdir()))
-    sn = splitext(basename(fn))[1]
-    path = joinpath(rp, sn) # "examples/sweep"
+    fn = string(__source__.file)            # "/home/user/project/examples/params.jl"
+    rp = dirname(relpath(fn, projectdir())) # "examples"
+    sn = splitext(basename(fn))[1]          # "params"
+    path = joinpath(rp, sn)                 # "examples/params"
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)
@@ -325,10 +334,11 @@ macro target(args...)
                 $(esc(out)).name = $(String(out))
                 $(esc(out)).hash = $recipe_hash
                 $(esc(out)).relpath = $path
-                $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
+                # $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
                 $(esc(out)).par_keys = $(par_keys)
                 $(esc(out)).mem_only = $memonly
                 $(esc(out)).par_tfs = [$(par_tfs...)]
+                $(esc(out)).weak_deps = [$(weak_deps...)]
                 append_deps_parameter_keys!($(esc(out)), $(par_keys))
             end
         end
@@ -346,7 +356,8 @@ macro target(args...)
                 zero(UInt64),
                 $(par_keys),
                 $(memonly),
-                [$(par_tfs...)]
+                [$(par_tfs...)],
+                [$(weak_deps...)],
                 )
             append_deps_parameter_keys!($(esc(out)), $(esc(out)).par_keys)
             $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
@@ -358,6 +369,7 @@ end
 
 macro sweep(out, recipe)
 
+    # @show recipe
     @assert out isa Symbol
     @assert recipe.head == :->
 
@@ -365,10 +377,11 @@ macro sweep(out, recipe)
 
     shared_deps = []
     iteration_deps = []
+    weak_deps = []
     variable_keys = []
     par_keys = []
 
-    # treat the special  case (A;h)
+    # treat the special  case (A;h), transform to (A,;h)
     if recipe.args[1].head == :block
         Base.remove_linenums!(recipe.args[1])
         @assert length(recipe.args[1].args) == 2
@@ -397,12 +410,16 @@ macro sweep(out, recipe)
                     error("Unexpected parameter in sweep definition: $p")
                 end
             end
-        elseif arg isa Expr && arg.head == :call
-            @assert arg.args[1] == :!
+        elseif arg isa Expr && arg.head == :call && arg.args[1] == :!
+            # @assert arg.args[1] == :!
             push!(iteration_deps, esc(arg.args[2]))
             args.args[i] = arg.args[2]
         elseif arg isa Symbol
             push!(shared_deps, esc(arg))
+        elseif arg isa Expr && arg.head == :call && arg.args[1] == :~
+            weak_dep = arg.args[2]
+            push!(weak_deps, esc(weak_dep))
+            args.args[i] = weak_dep
         else
             error("Unexpected recipe argument: $arg")
         end
@@ -430,9 +447,8 @@ macro sweep(out, recipe)
                 $(esc(out)).iteration_timestamps = []
                 $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)) , hash(nothing))
                 $(esc(out)).par_keys = $(par_keys)
+                $(esc(out)).weak_deps = [$(weak_deps...)]
                 append_deps_parameter_keys!($(esc(out)), $(par_keys))
-                # full_path = Makeitso.sweep_fullpath($(esc(out)))
-                # isfile(full_path) && rm(full_path)
             end
         end
     else
@@ -459,6 +475,7 @@ macro sweep(out, recipe)
                 [],
                 zero(Int64),
                 $(par_keys),
+                [$(weak_deps...)],
             )
             append_deps_parameter_keys!($(esc(out)), $(esc(out)).par_keys)
             $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
@@ -519,21 +536,24 @@ function sweep(t::Target; kwargs...)
 
     sweep = Sweep(
         "$(t.name).sweep",
+        # t.name,
         rp,
-        [],
-        [t],
-        var_keys,
+        [],        # shaed dependencies
+        [t],       # iteration dependencies
+        var_keys,  # keywords corresponding to variables to sweep over
         recipe_fn,
-        pihash(recipe_xp),
+        pihash(recipe_xp), # has of the recipe
+        # t.hash,
         nothing,
         0.0,
         params,
-        nothing, # iteration_cache
-        0.0, # iteration_timestamp
-        nothing, # iteration_parameters
-        [], # iteration_timestamps
-        zero(UInt64), # tree_hash
-        par_keys, # par_keys
+        nothing,      # iteration_cache
+        0.0,          # iteration_timestamp
+        nothing,      # iteration_parameters
+        [],           # iteration_timestamps
+        zero(UInt64), # tree_hash at which the cached iteration was computed
+        par_keys,     # keywords correspdongin to fixed parameters
+        []            # weak dependencies
     )
     append_deps_parameter_keys!(sweep, sweep.par_keys)
     sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))

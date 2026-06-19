@@ -3,13 +3,13 @@
 using Makeitso
 
 module M1
-include("inputs1.jl")
-include("algo1.jl")
+include("targets/inputs1.jl")
+include("targets/algo1.jl")
 end
 
 module M2
-include("inputs2.jl")
-include("algo1.jl")
+include("targets/inputs2.jl")
+include("targets/algo1.jl")
 end
 
 x1 = make(M1.algo)
