@@ -198,6 +198,9 @@ function append_deps_parameter_keys!(target::Target, par_keys)
     for dep in target.deps
         append!(par_keys, dep.par_keys)
     end
+    for dep in target.weak_deps
+        append!(par_keys, dep.par_keys)
+    end
     unique!(par_keys)
     return par_keys
 end
@@ -207,6 +210,9 @@ function append_deps_parameter_keys!(target::Sweep, par_keys)
         append!(par_keys, dep.par_keys)
     end
     for dep in target.iteration_deps
+        append!(par_keys, dep.par_keys)
+    end
+    for dep in target.weak_deps
         append!(par_keys, dep.par_keys)
     end
     unique!(par_keys)
