@@ -1,3 +1,7 @@
+- Fixed bug where parameters for weak dependencies where not propagated to their dependents
+- Only load requested iterations for sweeps (instead of loading all and then filtering the DF)
+- Methods `sweep(target, over; pars...)` for the ad-hoc creation of sweeps
+
 # Version 3.0
 
 - [BREAKING]: updated compat section might mean that computed hashes differ and that outputs stored by a previous version of `Makeitso` might not be found automatically.

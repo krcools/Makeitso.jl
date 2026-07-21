@@ -127,14 +127,23 @@ function cache_uptodate(sweep::Target; parameters)
 end
 
 
-function loadsims(dirname, configs, parameters)
+function loadsims(sweep, configs, parameters)
 
-    df = DrWatson.collect_results(datadir(dirname))
+    dirname = target_dirname(sweep)
+    rinclude = map(configs) do variables_dict
+        fn = Regex(fn_pars_hash(sweep, merge(parameters, variables_dict)) * "\\.jld2")
+    end
+
+    # @show rinclude
+
+    df = DrWatson.collect_results(datadir(dirname); rinclude=rinclude)
     configs == nothing && return df
 
     # @show configs
     # @show parameters
     # @show df
+
+    l1 = size(df,1)
 
     df = filter!(df) do row
         for (k,v) in pairs(parameters)
@@ -145,6 +154,8 @@ function loadsims(dirname, configs, parameters)
     end
 
     # @show df
+    l2 = size(df,1)
+    @assert l1 == l2
 
     df = filter!(df) do row
         for config in configs
@@ -159,6 +170,8 @@ function loadsims(dirname, configs, parameters)
     end
 
     # @show df
+    l3 = size(df,1)
+    @assert l1 == l3
 
     return df
 end

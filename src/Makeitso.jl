@@ -10,7 +10,27 @@ using MacroTools
 export @target
 export @sweep, @sweep2
 export make, sweep
+export over
 export getrow
+
+
+struct Over
+    keys::Vector{Symbol}
+end
+
+function over(keys...)
+    syms = Symbol[]
+    for k in keys
+        if k isa Symbol
+            push!(syms, k)
+        elseif k isa AbstractString
+            push!(syms, Symbol(k))
+        else
+            error("over(...) expects Symbols or Strings, got $(typeof(k))")
+        end
+    end
+    return Over(syms)
+end
 
 
 mutable struct Target
@@ -150,7 +170,7 @@ function sweep_update!(sweep, level, variables_list, parameters, nonvariables)
 
     # collect the results in the .dir folder
     @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m at $(NamedTuple(parameters)): collect iterations."
-    df = loadsims(target_dirname(sweep), variables_list, nonvariables)
+    df = loadsims(sweep, variables_list, nonvariables)
     select!(df, Not([:timestamp, :hash, :path, :params, :tree_hash]))
 
     sweep.cache = df
@@ -560,6 +580,76 @@ function sweep(t::Target; kwargs...)
 
     df = make(sweep; vars..., params...)
 end
+
+
+function sweep(t::Target, o::Over; kwargs...)
+
+    tname = Symbol(t.name)
+
+    params = Pair[]
+    vars = Pair[]
+
+    var_keys = Symbol[]
+    par_keys = Symbol[]
+
+    over_keys = Set(o.keys)
+
+    for k in o.keys
+        haskey(kwargs, k) || error("Missing sweep variable '$k' in keyword arguments")
+    end
+
+    for (k,v) in kwargs
+        if k in over_keys
+            vv = v isa Ref ? v[] : v
+            vals = try
+                size(vv) == () ? [vv] : vv
+            catch
+                [vv]
+            end
+            push!(vars, k=>vals)
+            push!(var_keys, k)
+        else
+            pv = v isa Ref ? v[] : v
+            push!(params, k=>pv)
+            push!(par_keys, k)
+        end
+    end
+
+    params = Dict(params)
+    vars = Dict(vars)
+
+    rp = t.relpath
+
+    recipe_xp = :((t; kwargs...) -> (d=Dict(tname=>t); NamedTuple(d)))
+    recipe_fn = (t; kwargs...) -> (d=Dict(tname=>t); NamedTuple(d))
+
+    sweep = Sweep(
+        "$(t.name).sweep",
+        rp,
+        [],
+        [t],
+        var_keys,
+        recipe_fn,
+        pihash(recipe_xp),
+        nothing,
+        0.0,
+        params,
+        nothing,
+        0.0,
+        nothing,
+        [],
+        zero(UInt64),
+        par_keys,
+        []
+    )
+    append_deps_parameter_keys!(sweep, sweep.par_keys)
+    sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
+
+    df = make(sweep; vars..., params...)
+end
+
+
+
 
 end # module
 
