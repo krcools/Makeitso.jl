@@ -85,11 +85,10 @@ function make(target::Target, level=0; verbose = :full, kwargs...)
 
     pfx = ""
     verbose == :full && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)):"
-    verbose == :short && @info "[$level]$(pfx) making \e[32m$(target.name):"
+    verbose == :short && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m:"
 
 
     if cache_uptodate(target; parameters=kwargs)
-        @info "\e[34m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
         verbose == :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
         verbose == :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from cache."
         return target.cache
@@ -105,9 +104,9 @@ function make(target::Target, level=0; verbose = :full, kwargs...)
     for (t,tf) in zip(target.deps, target.par_tfs)
         kws = tf === nothing ? kwargs : tf(;kwargs...)
         # @show kws
-        make(t, level+1; kws...)
+        make(t, level+1;verbose=verbose, kws...)
     end
-    update!(target, level; kwargs...)
+    update!(target, level; verbose=verbose, kwargs...)
 
     return target.cache
 end
