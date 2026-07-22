@@ -649,6 +649,106 @@ function sweep(t::Target, o::Over; kwargs...)
 end
 
 
+"""
+    deepclean(x)
+
+Recursively removes all on-disk artifacts for `x` and its dependencies.
+
+- For `Target`, this traverses `target.deps` and then removes `target_dirname(target)`.
+- For `Sweep`, this traverses `sweep.shared_deps` and `sweep.iteration_deps` and then removes `target_dirname(sweep)`.
+
+If a directory does not exist, it is skipped.
+"""
+function deepclean(target::Target)
+    # Recursively clean dependencies first
+    for dep in target.deps
+        deepclean(dep)
+    end
+    
+    # Remove the target's directory and all its jld2 files
+    dir = target_dirname(target)
+    if isdir(dir)
+        rm(dir, recursive=true)
+    end
+end
+
+
+function deepclean(sweep::Sweep)
+    # Recursively clean shared dependencies first
+    for dep in sweep.shared_deps
+        deepclean(dep)
+    end
+    
+    # Recursively clean iteration dependencies first
+    for dep in sweep.iteration_deps
+        deepclean(dep)
+    end
+    
+    # Remove the sweep's directory and all its jld2 files
+    dir = target_dirname(sweep)
+    if isdir(dir)
+        rm(dir, recursive=true)
+    end
+end
+
+
+function _collect_from_dir(dir)
+    if !isdir(dir)
+        return DataFrame()
+    end
+
+    df = DrWatson.collect_results(dir; black_list=String[])
+
+    # Remove metadata fields
+    cols_to_drop = intersect(["hash", "timestamp", "tree_hash", "path"], names(df))
+    if !isempty(cols_to_drop)
+        select!(df, Not(cols_to_drop))
+    end
+
+    # Flatten params dictionary into top-level columns
+    if "params" in names(df)
+        param_keys = Symbol[]
+        for p in df.params
+            if p isa AbstractDict
+                for k in keys(p)
+                    sk = Symbol(k)
+                    if !(sk in param_keys)
+                        push!(param_keys, sk)
+                    end
+                end
+            end
+        end
+
+        @show param_keys
+        for k in param_keys
+            df[!, k] = [
+                (p isa AbstractDict && haskey(p, k)) ? p[k] :
+                (p isa AbstractDict && haskey(p, String(k))) ? p[String(k)] :
+                missing
+                for p in df.params
+            ]
+        end
+
+        select!(df, Not(:params))
+    end
+    @show df
+
+    return df
+end
+
+
+function collect(target::Target)
+    dir = target_dirname(target)
+    return _collect_from_dir(dir)
+end
+
+
+function collect(sweep::Sweep)
+    dir = target_dirname(sweep)
+    return _collect_from_dir(dir)
+end
+
+
 
 
 end # module
