@@ -1,6 +1,7 @@
 - Fixed bug where parameters for weak dependencies where not propagated to their dependents
 - Only load requested iterations for sweeps (instead of loading all and then filtering the DF)
 - Methods `sweep(target, over; pars...)` for the ad-hoc creation of sweeps
+- Added `collect` to load all products for the given target that are available on disk in a DataFrame.
 
 # Version 3.0
 
