@@ -79,64 +79,64 @@ function Target(name, recipe, deps, hash, simname)
     t = Target(deps, recipe, 0.0, nothing, name, hash, simname, nothing)
 end
 
-# verbose options are :full, :short, :none
-function make(target::Target, level=0; verbose = :full, kwargs...)
+# verbosity options are :full, :short, :none
+function make(target::Target, level=0; verbosity = :full, kwargs...)
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.par_keys))
 
     pfx = ""
-    verbose == :full && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)):"
-    verbose == :short && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m:"
+    verbosity == :full && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)):"
+    verbosity == :short && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m:"
 
 
     if cache_uptodate(target; parameters=kwargs)
-        verbose == :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
-        verbose == :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from cache."
+        verbosity == :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
+        verbosity == :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from cache."
         return target.cache
     end
 
     try_loading(target, level, kwargs)
     if cache_uptodate(target; parameters=kwargs)
-        verbose == :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
-        verbose == :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from disk."
+        verbosity == :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
+        verbosity == :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from disk."
         return target.cache
     end
 
     for (t,tf) in zip(target.deps, target.par_tfs)
         kws = tf === nothing ? kwargs : tf(;kwargs...)
         # @show kws
-        make(t, level+1;verbose=verbose, kws...)
+        make(t, level+1;verbosity=verbosity, kws...)
     end
-    update!(target, level; verbose=verbose, kwargs...)
+    update!(target, level; verbosity=verbosity, kwargs...)
 
     return target.cache
 end
 
 
-function make(sweep::Sweep, level=0;verbose = :full, kwargs...)
+function make(sweep::Sweep, level=0;verbosity = :full, kwargs...)
 
     pfx = "⎵"^level
     pfx = ""
-    verbose == :full && @info "[$level]$(pfx) making \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)):"
-    verbose == :short && @info "[$level]$(pfx) making \e[32m$(sweep.name)\e[0m:"
+    verbosity == :full && @info "[$level]$(pfx) sweeping \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)):"
+    verbosity == :short && @info "[$level]$(pfx) sweeping \e[32m$(sweep.name)\e[0m:"
 
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.par_keys || k in sweep.variable_keys))
     parameters = Dict((k,v) for (k,v) in kwargs if !(k in sweep.variable_keys))
     configs = DrWatson.dict_list(Dict((s, kwargs[s]) for s in sweep.variable_keys))
 
     if cache_uptodate(sweep; parameters=kwargs)
-        verbose == :full && @info "\e[34m[$level]\e[0m$(pfx) sweep  \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
-        verbose == :short && @info "\e[34m[$level]\e[0m$(pfx) sweep  \e[32m$(sweep.name)\e[0m: retrieved from cache."
+        verbosity == :full && @info "\e[34m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
+        verbosity == :short && @info "\e[34m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m: retrieved from cache."
         return sweep.cache
     end
     try_loading(sweep, level, kwargs)
     if cache_uptodate(sweep; parameters=kwargs)
-        verbose == :full && @info "\e[35m[$level]\e[0m$(pfx) sweep  \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
-        verbose == :short && @info "\e[35m[$level]\e[0m$(pfx) sweep  \e[32m$(sweep.name)\e[0m: retrieved from disk."
+        verbosity == :full && @info "\e[35m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
+        verbosity == :short && @info "\e[35m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m: retrieved from disk."
         return sweep.cache
     end
 
     for t in sweep.shared_deps
-        make(t, level+1; parameters...)
+        make(t, level+1; verbosity, parameters...)
     end
 
     sweep.iteration_timestamps = []
@@ -144,34 +144,34 @@ function make(sweep::Sweep, level=0;verbose = :full, kwargs...)
 
         pfx = "⎵"^(level+1)
         pfx = ""
-        verbose == :full && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)):"
-        verbose == :short && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m:"
+        verbosity == :full && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)):"
+        verbosity == :short && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m:"
 
         if iteration_cache_uptodate(sweep; parameters..., variables...)
-            verbose == :full && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)): retrieved from cache."
-            verbose == :short && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: retrieved from cache."
+            verbosity == :full && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)): retrieved from cache."
+            verbosity == :short && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: retrieved from cache."
             continue
         end
         try_loading_iteration(sweep, level+1, variables, parameters)
         if iteration_cache_uptodate(sweep; parameters..., variables...)
-            verbose == :full && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)): retrieved from disk."
-            verbose == :short && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: retrieved from disk."
+            verbosity == :full && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)): retrieved from disk."
+            verbosity == :short && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: retrieved from disk."
             continue
         end
 
         for t in sweep.iteration_deps
-            make(t, level+2;verbose=verbose, parameters..., variables...)
+            make(t, level+2;verbosity=verbosity, parameters..., variables...)
         end
 
-        iteration_update!(sweep, level+1, variables, parameters)
+        iteration_update!(sweep, level+1, variables, parameters; verbosity)
     end
 
-    sweep_update!(sweep, level, configs, kwargs, parameters;verbose=verbose)
+    sweep_update!(sweep, level, configs, kwargs, parameters;verbosity=verbosity)
     return sweep.cache
 end
 
 
-function sweep_update!(sweep, level, variables_list, parameters, nonvariables; verbose = :full)
+function sweep_update!(sweep, level, variables_list, parameters, nonvariables; verbosity = :full)
 
     pfx = "⎵"^(level)
     pfx = ""
@@ -179,8 +179,8 @@ function sweep_update!(sweep, level, variables_list, parameters, nonvariables; v
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
-    verbose == :full && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m at $(NamedTuple(parameters)): collect iterations."
-    verbose == :short && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m: collect iterations."
+    verbosity == :full && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m at $(NamedTuple(parameters)): collect iterations."
+    verbosity == :short && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m: collect iterations."
 
     df = loadsims(sweep, variables_list, nonvariables)
     select!(df, Not([:timestamp, :hash, :path, :params, :tree_hash]))
@@ -198,7 +198,7 @@ function sweep_update!(sweep, level, variables_list, parameters, nonvariables; v
     #     "tree_hash" => sweep.tree_hash))
 end
 
-function iteration_update!(sweep, level, variables, parameters;verbose = :full)
+function iteration_update!(sweep, level, variables, parameters;verbosity = :full)
 
     pfx = "⎵"^(level)
     pfx = ""
@@ -208,8 +208,8 @@ function iteration_update!(sweep, level, variables, parameters;verbose = :full)
     shared_deps_vals = [t.cache for t in sweep.shared_deps]
     iteration_deps_vals = [t.cache for t in sweep.iteration_deps]
 
-    verbose == :full && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(merge(parameters, variables))): computing from deps!"
-    verbose == :short && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: computing from deps!"    
+    verbosity == :full && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(merge(parameters, variables))): computing from deps!"
+    verbosity == :short && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: computing from deps!"    
     sweep.iteration_cache = sweep.recipe(
         shared_deps_vals...,
         iteration_deps_vals...,
@@ -233,14 +233,14 @@ function iteration_update!(sweep, level, variables, parameters;verbose = :full)
     jldsave(fullpath; dct...)
 end
 
-function update!(target::Target, level; verbose = :full, kwargs...)
+function update!(target::Target, level; verbosity = :full, kwargs...)
 
     pfx = ""
     fullpath = target_fullpath(target, kwargs)
     mkpath(dirname(fullpath))
 
-    verbose == :full && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): computing from deps!"
-    verbose == :short && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m: computing from deps!"
+    verbosity == :full && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): computing from deps!"
+    verbosity == :short && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m: computing from deps!"
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)..., target.weak_deps...; kwargs...)
     target.timestamp = time()
