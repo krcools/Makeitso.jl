@@ -43,9 +43,13 @@ function _merge_active_var_keys(active_var_keys::Set{Symbol}, keys)
 end
 
 function _progress_at(::Verbosity{Level}, kwargs, active_var_keys::Set{Symbol}) where {Level}
-    Level === :full && return " at $(NamedTuple(kwargs))"
+    if Level === :full
+        isempty(kwargs) && return ""
+        return " at $(NamedTuple(kwargs))"
+    end
     if Level === :variables
         filtered = Dict((k, v) for (k, v) in kwargs if k in active_var_keys)
+        isempty(filtered) && return ""
         return " at $(NamedTuple(filtered))"
     end
     return ""
