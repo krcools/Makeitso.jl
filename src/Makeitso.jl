@@ -21,7 +21,7 @@ end
 
 struct Verbosity{Level}
     function Verbosity{Level}() where {Level}
-        Level in (:short, :full) || throw(ArgumentError("Verbosity level must be :short or :full, got $(Level)"))
+        Level in (:short, :full, :variables) || throw(ArgumentError("Verbosity level must be :short, :full or :variables, got $(Level)"))
         new{Level}()
     end
 end
@@ -29,7 +29,26 @@ end
 function verbosity(s::Symbol)
     s === :short && return Verbosity{:short}()
     s === :full && return Verbosity{:full}()
-    throw(ArgumentError("verbosity(s::Symbol) expects :short or :full, got $(s)"))
+    s === :variables && return Verbosity{:variables}()
+    throw(ArgumentError("verbosity(s::Symbol) expects :short, :full or :variables, got $(s)"))
+end
+
+_symbolize(k::Symbol) = k
+_symbolize(k::QuoteNode) = k.value
+_symbolize(k) = Symbol(k)
+
+function _merge_active_var_keys(active_var_keys::Set{Symbol}, keys)
+    isempty(keys) && return active_var_keys
+    return union(active_var_keys, Set(_symbolize(k) for k in keys))
+end
+
+function _progress_at(::Verbosity{Level}, kwargs, active_var_keys::Set{Symbol}) where {Level}
+    Level === :full && return " at $(NamedTuple(kwargs))"
+    if Level === :variables
+        filtered = Dict((k, v) for (k, v) in kwargs if k in active_var_keys)
+        return " at $(NamedTuple(filtered))"
+    end
+    return ""
 end
 
 function over(keys...)
@@ -97,26 +116,30 @@ end
 make(target::Target; kwargs...) = make(target, verbosity(:full); kwargs...)
 
 function make(target::Target, v::Verbosity{Level}; kwargs...) where {Level}
-    make(target, v, 0; kwargs...)
+    make(target, v, 0, Set{Symbol}(); kwargs...)
 end
 
 function make(target::Target, v::Verbosity{Level}, level::Int; kwargs...) where {Level}
+    make(target, v, level, Set{Symbol}(); kwargs...)
+end
+
+function make(target::Target, v::Verbosity{Level}, level::Int, active_var_keys::Set{Symbol}; kwargs...) where {Level}
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in target.par_keys))
 
     pfx = ""
-    Level === :full && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)):"
+    Level !== :short && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)):"
     Level === :short && @info "[$level]$(pfx) making \e[32m$(target.name)\e[0m:"
 
 
     if cache_uptodate(target; parameters=kwargs)
-        Level === :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
+        Level !== :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)): retrieved from cache."
         Level === :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from cache."
         return target.cache
     end
 
     try_loading(target, level, kwargs)
     if cache_uptodate(target; parameters=kwargs)
-        Level === :full && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
+        Level !== :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)): retrieved from disk."
         Level === :short && @info "[$level]$(pfx) target \e[32m$(target.name)\e[0m: retrieved from disk."
         return target.cache
     end
@@ -124,9 +147,9 @@ function make(target::Target, v::Verbosity{Level}, level::Int; kwargs...) where 
     for (t,tf) in zip(target.deps, target.par_tfs)
         kws = tf === nothing ? kwargs : tf(;kwargs...)
         # @show kws
-        make(t, v, level+1; kws...)
+        make(t, v, level+1, active_var_keys; kws...)
     end
-    update!(target, v, level; kwargs...)
+    update!(target, v, level, active_var_keys; kwargs...)
 
     return target.cache
 end
@@ -135,34 +158,39 @@ end
 make(sweep::Sweep; kwargs...) = make(sweep, verbosity(:full); kwargs...)
 
 function make(sweep::Sweep, v::Verbosity{Level}; kwargs...) where {Level}
-    make(sweep, v, 0; kwargs...)
+    make(sweep, v, 0, Set{Symbol}(); kwargs...)
 end
 
 function make(sweep::Sweep, v::Verbosity{Level}, level::Int; kwargs...) where {Level}
+    make(sweep, v, level, Set{Symbol}(); kwargs...)
+end
+
+function make(sweep::Sweep, v::Verbosity{Level}, level::Int, active_var_keys::Set{Symbol}; kwargs...) where {Level}
 
     pfx = "⎵"^level
     pfx = ""
-    Level === :full && @info "[$level]$(pfx) sweeping \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)):"
+    Level !== :short && @info "[$level]$(pfx) sweeping \e[32m$(sweep.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)):"
     Level === :short && @info "[$level]$(pfx) sweeping \e[32m$(sweep.name)\e[0m:"
 
     kwargs = Dict((k,v) for (k,v) in kwargs if (k in sweep.par_keys || k in sweep.variable_keys))
     parameters = Dict((k,v) for (k,v) in kwargs if !(k in sweep.variable_keys))
     configs = DrWatson.dict_list(Dict((s, kwargs[s]) for s in sweep.variable_keys))
+    this_level_var_keys = _merge_active_var_keys(active_var_keys, sweep.variable_keys)
 
     if cache_uptodate(sweep; parameters=kwargs)
-        Level === :full && @info "\e[34m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)): retrieved from cache."
+        Level !== :short && @info "\e[34m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)): retrieved from cache."
         Level === :short && @info "\e[34m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m: retrieved from cache."
         return sweep.cache
     end
     try_loading(sweep, level, kwargs)
     if cache_uptodate(sweep; parameters=kwargs)
-        Level === :full && @info "\e[35m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m at $(NamedTuple(kwargs)): retrieved from disk."
+        Level !== :short && @info "\e[35m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)): retrieved from disk."
         Level === :short && @info "\e[35m[$level]\e[0m$(pfx) sweep \e[32m$(sweep.name)\e[0m: retrieved from disk."
         return sweep.cache
     end
 
     for t in sweep.shared_deps
-        make(t, v, level+1; parameters...)
+        make(t, v, level+1, active_var_keys; parameters...)
     end
 
     sweep.iteration_timestamps = []
@@ -170,34 +198,35 @@ function make(sweep::Sweep, v::Verbosity{Level}, level::Int; kwargs...) where {L
 
         pfx = "⎵"^(level+1)
         pfx = ""
-        Level === :full && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)):"
+        msg_kwargs = Level === :full ? variables : merge(parameters, variables)
+        Level !== :short && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m$(_progress_at(v, msg_kwargs, this_level_var_keys)):"
         Level === :short && @info "[$(level+1)]$(pfx) making \e[32m$(sweep.name)\e[0m:"
 
         if iteration_cache_uptodate(sweep; parameters..., variables...)
-            Level === :full && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)): retrieved from cache."
+            Level !== :short && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m$(_progress_at(v, msg_kwargs, this_level_var_keys)): retrieved from cache."
             Level === :short && @info "\e[34m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: retrieved from cache."
             continue
         end
         try_loading_iteration(sweep, level+1, variables, parameters)
         if iteration_cache_uptodate(sweep; parameters..., variables...)
-            Level === :full && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(variables)): retrieved from disk."
+            Level !== :short && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m$(_progress_at(v, msg_kwargs, this_level_var_keys)): retrieved from disk."
             Level === :short && @info "\e[35m[$(level+1)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: retrieved from disk."
             continue
         end
 
         for t in sweep.iteration_deps
-            make(t, v, level+2; parameters..., variables...)
+            make(t, v, level+2, this_level_var_keys; parameters..., variables...)
         end
 
-        iteration_update!(sweep, v, level+1, variables, parameters)
+        iteration_update!(sweep, v, level+1, variables, parameters, this_level_var_keys)
     end
 
-    sweep_update!(sweep, v, level, configs, kwargs, parameters)
+    sweep_update!(sweep, v, level, configs, kwargs, parameters, active_var_keys)
     return sweep.cache
 end
 
 
-function sweep_update!(sweep, ::Verbosity{Level}, level, variables_list, parameters, nonvariables) where {Level}
+function sweep_update!(sweep, v::Verbosity{Level}, level, variables_list, parameters, nonvariables, active_var_keys::Set{Symbol}) where {Level}
 
     pfx = "⎵"^(level)
     pfx = ""
@@ -205,7 +234,7 @@ function sweep_update!(sweep, ::Verbosity{Level}, level, variables_list, paramet
     mkpath(dirname(fullpath))
 
     # collect the results in the .dir folder
-    Level === :full && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m at $(NamedTuple(parameters)): collect iterations."
+    Level !== :short && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m$(_progress_at(v, parameters, active_var_keys)): collect iterations."
     Level === :short && @info "[$level]$(pfx) sweep  \e[32m$(sweep.name)\e[0m: collect iterations."
 
     df = loadsims(sweep, variables_list, nonvariables)
@@ -224,7 +253,7 @@ function sweep_update!(sweep, ::Verbosity{Level}, level, variables_list, paramet
     #     "tree_hash" => sweep.tree_hash))
 end
 
-function iteration_update!(sweep, ::Verbosity{Level}, level, variables, parameters) where {Level}
+function iteration_update!(sweep, v::Verbosity{Level}, level, variables, parameters, active_var_keys::Set{Symbol}) where {Level}
 
     pfx = "⎵"^(level)
     pfx = ""
@@ -233,8 +262,9 @@ function iteration_update!(sweep, ::Verbosity{Level}, level, variables, paramete
 
     shared_deps_vals = [t.cache for t in sweep.shared_deps]
     iteration_deps_vals = [t.cache for t in sweep.iteration_deps]
+    msg_kwargs = merge(parameters, variables)
 
-    Level === :full && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m at $(NamedTuple(merge(parameters, variables))): computing from deps!"
+    Level !== :short && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m$(_progress_at(v, msg_kwargs, active_var_keys)): computing from deps!"
     Level === :short && @info "\e[38;5;208m[$(level)]\e[0m$(pfx) target \e[32m$(sweep.name)\e[0m: computing from deps!"    
     sweep.iteration_cache = sweep.recipe(
         shared_deps_vals...,
@@ -259,13 +289,13 @@ function iteration_update!(sweep, ::Verbosity{Level}, level, variables, paramete
     jldsave(fullpath; dct...)
 end
 
-function update!(target::Target, ::Verbosity{Level}, level; kwargs...) where {Level}
+function update!(target::Target, v::Verbosity{Level}, level, active_var_keys::Set{Symbol}; kwargs...) where {Level}
 
     pfx = ""
     fullpath = target_fullpath(target, kwargs)
     mkpath(dirname(fullpath))
 
-    Level === :full && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m at $(NamedTuple(kwargs)): computing from deps!"
+    Level !== :short && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m$(_progress_at(v, kwargs, active_var_keys)): computing from deps!"
     Level === :short && @info "\e[38;5;208m[$level]\e[0m$(pfx) target \e[32m$(target.name)\e[0m: computing from deps!"
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)..., target.weak_deps...; kwargs...)
