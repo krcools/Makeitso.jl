@@ -30,7 +30,7 @@ end
 # x = make(average; seed=[1.0,2.0,3.0], p=3.14)
 # y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
 
-x = make(average, verbosity(:full); seed=[1.0,2.0,3.0], p=3.14)
+x = make(average, verbosity(:variables); seed=[1.0,2.0,3.0], p=3.14)
 # y = make(solutions, verbosity(:short); seed=[1.0,2.0,3.0], p=3.14)
 
 # @info "Building zs"
