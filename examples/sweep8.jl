@@ -31,12 +31,12 @@ end
 # y = make(solutions; seed=[1.0,2.0,3.0], p=3.14)
 
 x = make(average, verbosity(:variables); seed=[1.0,2.0,3.0], p=3.14)
-# y = make(solutions, verbosity(:short); seed=[1.0,2.0,3.0], p=3.14)
+y = make(solutions, verbosity(:variables); seed=[1.0,2.0,3.0], p=3.14)
 
-# @info "Building zs"
-# z1 = sweep(average; seed=Ref([1.0,2.0,3.0]), p=[2.78, 3.14])
-# z2 = sweep(average; seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])
+@info "Building zs"
+z1 = sweep(average; seed=Ref([1.0,2.0,3.0]), p=[2.78, 3.14])
+z2 = sweep(average; seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])
 
-# @info "Building ws"
-# w1 = sweep(average, over(:p); seed=[1.0,2.0,3.0], p=[2.78, 3.14])
-# w2 = sweep(average, over(:seed, :p); seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])
+@info "Building ws"
+w1 = sweep(average, over(:p), verbosity(:variables); seed=[1.0,2.0,3.0], p=[2.78, 3.14])
+w2 = sweep(average, over(:seed, :p), verbosity(:variables); seed=[[1.0,2.0,3.0], [4.0,5.0,6.0]], p=[2.78, 3.14])

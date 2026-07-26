@@ -18,10 +18,10 @@ end
     return solution
 end
 
-@sweep approx_error (refsol, !approx; n = N, nref) -> begin
+@sweep approx_error (refsol, !approx; n = [], nref) -> begin
     @show approx
     @show refsol
     (;error = abs(approx - refsol))
 end
 
-make(approx_error; n=collect(1:10), nref=16)
+make(approx_error, verbosity(:variables); n=collect(1:10), nref=16)

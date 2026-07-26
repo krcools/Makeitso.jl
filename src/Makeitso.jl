@@ -580,6 +580,16 @@ end
 
 
 function sweep(t::Target; kwargs...)
+    sweep(t, verbosity(:full); kwargs...)
+end
+
+
+function sweep(t::Target, s::Symbol; kwargs...)
+    sweep(t, verbosity(s); kwargs...)
+end
+
+
+function sweep(t::Target, v::Verbosity{Level}; kwargs...) where {Level}
 
     tname = Symbol(t.name)
 
@@ -652,11 +662,21 @@ function sweep(t::Target; kwargs...)
     append_deps_parameter_keys!(sweep, sweep.par_keys)
     sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
 
-    df = make(sweep; vars..., params...)
+    df = make(sweep, v; vars..., params...)
 end
 
 
 function sweep(t::Target, o::Over; kwargs...)
+    sweep(t, o, verbosity(:full); kwargs...)
+end
+
+
+function sweep(t::Target, o::Over, s::Symbol; kwargs...)
+    sweep(t, o, verbosity(s); kwargs...)
+end
+
+
+function sweep(t::Target, o::Over, v::Verbosity{Level}; kwargs...) where {Level}
 
     tname = Symbol(t.name)
 
@@ -719,7 +739,7 @@ function sweep(t::Target, o::Over; kwargs...)
     append_deps_parameter_keys!(sweep, sweep.par_keys)
     sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
 
-    df = make(sweep; vars..., params...)
+    df = make(sweep, v; vars..., params...)
 end
 
 
