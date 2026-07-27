@@ -116,8 +116,8 @@ function Target(name, recipe, deps, hash, simname)
     t = Target(deps, recipe, 0.0, nothing, name, hash, simname, nothing)
 end
 
-# default verbosity is :full
-make(target::Target; kwargs...) = make(target, verbosity(:full); kwargs...)
+# default verbosity is :variables
+make(target::Target; kwargs...) = make(target, verbosity(:variables); kwargs...)
 
 function make(target::Target, v::Verbosity{Level}; kwargs...) where {Level}
     make(target, v, 0, Set{Symbol}(); kwargs...)
@@ -159,7 +159,7 @@ function make(target::Target, v::Verbosity{Level}, level::Int, active_var_keys::
 end
 
 
-make(sweep::Sweep; kwargs...) = make(sweep, verbosity(:full); kwargs...)
+make(sweep::Sweep; kwargs...) = make(sweep, verbosity(:variables); kwargs...)
 
 function make(sweep::Sweep, v::Verbosity{Level}; kwargs...) where {Level}
     make(sweep, v, 0, Set{Symbol}(); kwargs...)
@@ -580,7 +580,7 @@ end
 
 
 function sweep(t::Target; kwargs...)
-    sweep(t, verbosity(:full); kwargs...)
+    sweep(t, verbosity(:variables); kwargs...)
 end
 
 
@@ -667,7 +667,7 @@ end
 
 
 function sweep(t::Target, o::Over; kwargs...)
-    sweep(t, o, verbosity(:full); kwargs...)
+    sweep(t, o, verbosity(:variables); kwargs...)
 end
 
 
