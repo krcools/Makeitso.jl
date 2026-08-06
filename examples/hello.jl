@@ -1,4 +1,5 @@
 using Makeitso
+using Test
 
 @target A ()->1:10
 @target B ()->[-4,-3,-2,-1,0,1,2,3,4,5]
@@ -6,12 +7,12 @@ using Makeitso
 @target D (A,B,C)->A.+B.+C
 
 x = make(D)[end]
-@assert x == 30
+@test x == 30
 
 @target B ()->pi
 println("--- Recipe for B modified! ---")
 
 x = make(D)[end]
-@assert x ≈ (20+2pi)
+@test x ≈ (20+2pi)
 
 

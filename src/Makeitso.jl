@@ -355,6 +355,7 @@ macro target(args...)
 
     deps = []
     weak_deps = []
+    weak_dep_symbols = Symbol[]
     par_keys = []
     par_kws = [] 
 
@@ -367,6 +368,7 @@ macro target(args...)
         elseif arg isa Expr && arg.head == :call && arg.args[1] == :~
             weak_dep = arg.args[2]
             push!(weak_deps, esc(weak_dep))
+            push!(weak_dep_symbols, weak_dep)
             tp.args[i] = weak_dep
         elseif arg isa Expr && arg.head == :call # e.g. arg == :(B(;q=2h))
             tname = arg.args[1] # e.g. tname == :B
@@ -392,6 +394,8 @@ macro target(args...)
     # par_kws  == [nothing, [Expr(:kw, :q, :(2h))]]
     # par_keys == [:h, :p]
 
+    explicit_par_keys = Symbol[p for p in par_keys]
+
     # build the keyword transformation expressions
     par_tfs = [] # expressions to transform the kwargs for the target into kwargs for the dependencies
     for (i, tname) in pairs(deps)
@@ -408,6 +412,8 @@ macro target(args...)
     # add kwargs... to the argument list to accept parameters for dependencies
     tp = add_kwargs_to_args!(tp)
     # e.g tp == :((A, B, ;h, p, kwargs...))
+
+    preprocess_weak_dep_recipe!(recipe, weak_dep_symbols, explicit_par_keys)
 
     fn = string(__source__.file)            # "/home/user/project/examples/params.jl"
     rp = dirname(relpath(fn, projectdir())) # "examples"
@@ -472,8 +478,10 @@ macro sweep(out, recipe)
     shared_deps = []
     iteration_deps = []
     weak_deps = []
+    weak_dep_symbols = Symbol[]
     variable_keys = []
     par_keys = []
+    explicit_recipe_keys = Symbol[]
 
     # treat the special  case (A;h), transform to (A,;h)
     if recipe.args[1].head == :block
@@ -497,9 +505,11 @@ macro sweep(out, recipe)
             for (j,p) in pairs(arg.args)
                 if p isa Expr && p.head == :kw
                     push!(variable_keys, QuoteNode(p.args[1]))
+                    push!(explicit_recipe_keys, p.args[1])
                     arg.args[j] = p.args[1]
                 elseif p isa Symbol
                     push!(par_keys, p)
+                    push!(explicit_recipe_keys, p)
                 else
                     error("Unexpected parameter in sweep definition: $p")
                 end
@@ -513,6 +523,7 @@ macro sweep(out, recipe)
         elseif arg isa Expr && arg.head == :call && arg.args[1] == :~
             weak_dep = arg.args[2]
             push!(weak_deps, esc(weak_dep))
+            push!(weak_dep_symbols, weak_dep)
             args.args[i] = weak_dep
         else
             error("Unexpected recipe argument: $arg")
@@ -521,6 +532,8 @@ macro sweep(out, recipe)
 
     # add kwargs... to the argument list
     args = add_kwargs_to_args!(args)
+
+    preprocess_weak_dep_recipe!(recipe, weak_dep_symbols, explicit_recipe_keys)
 
     exists = isdefined(__module__, out)
     recipe_hash = pihash(recipe)

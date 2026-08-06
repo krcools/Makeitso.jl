@@ -299,3 +299,71 @@ function try_loading_iteration(sweep::Sweep, level, variables, parameters)
         # @info "iteration $(sweep.name) at $(NamedTuple(variables)): no backup at $(relpath(path, projectdir()))"
     end
 end
+
+
+function weak_dep_make_call_expr(dep::Symbol, explicit_keys::Vector{Symbol})
+    kwargs_args = Any[explicit_keys..., Expr(:..., :kwargs)]
+    return Expr(:call, :make, Expr(:parameters, kwargs_args...), dep)
+end
+
+
+function is_make_call_head(x)
+    x === :make && return true
+    if x isa Expr && x.head == :. && length(x.args) == 2
+        return x.args[2] == QuoteNode(:make)
+    end
+    return false
+end
+
+
+function rewrite_weak_dep_expr(x, weak_dep_syms::Set{Symbol}, explicit_keys::Vector{Symbol})
+    if x isa Symbol
+        if x in weak_dep_syms
+            return weak_dep_make_call_expr(x, explicit_keys)
+        end
+        return x
+    elseif x isa QuoteNode
+        return x
+    elseif !(x isa Expr)
+        return x
+    end
+
+    if x.head == :quote
+        return x
+    end
+
+    if x.head == :call && !isempty(x.args) && is_make_call_head(x.args[1])
+        return x
+    end
+
+    if x.head == :(=) || x.head == :kw
+        if length(x.args) < 2
+            return x
+        end
+        args = Any[x.args[1]]
+        append!(args, rewrite_weak_dep_expr.(x.args[2:end], Ref(weak_dep_syms), Ref(explicit_keys)))
+        return Expr(x.head, args...)
+    end
+
+    if x.head == :->
+        @assert length(x.args) == 2
+        return Expr(:->, x.args[1], rewrite_weak_dep_expr(x.args[2], weak_dep_syms, explicit_keys))
+    end
+
+    if x.head == :function
+        @assert length(x.args) == 2
+        return Expr(:function, x.args[1], rewrite_weak_dep_expr(x.args[2], weak_dep_syms, explicit_keys))
+    end
+
+    new_args = rewrite_weak_dep_expr.(x.args, Ref(weak_dep_syms), Ref(explicit_keys))
+    return Expr(x.head, new_args...)
+end
+
+
+function preprocess_weak_dep_recipe!(recipe::Expr, weak_dep_symbols::Vector{Symbol}, explicit_keys::Vector{Symbol})
+    isempty(weak_dep_symbols) && return recipe
+    @assert recipe.head == :->
+    weak_dep_syms = Set(weak_dep_symbols)
+    recipe.args[2] = rewrite_weak_dep_expr(recipe.args[2], weak_dep_syms, explicit_keys)
+    return recipe
+end
