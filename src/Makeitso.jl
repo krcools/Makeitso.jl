@@ -6,7 +6,7 @@ using DrWatson
 using BakerStreet
 using DataFrames
 using MacroTools
-
+using StableHashTraits
 export @target
 export @sweep, @sweep2
 export make, sweep
@@ -247,7 +247,7 @@ function sweep_update!(sweep, v::Verbosity{Level}, level, variables_list, parame
     sweep.cache = df
     sweep.timestamp = time()
     sweep.parameters = parameters
-    sweep.tree_hash = target_hash(sweep, hash(nothing))
+    sweep.tree_hash = target_hash(sweep)
 
     # save(fullpath, Dict(
     #     "cache" => sweep.cache,
@@ -277,7 +277,7 @@ function iteration_update!(sweep, v::Verbosity{Level}, level, variables, paramet
         variables..., parameters...)
     sweep.iteration_timestamp = time()
     sweep.iteration_parameters = merge(variables, parameters)
-    sweep.tree_hash = target_hash(sweep, hash(nothing))
+    sweep.tree_hash = target_hash(sweep)
 
     dct = merge(
         sweep.iteration_cache,
@@ -304,7 +304,7 @@ function update!(target::Target, v::Verbosity{Level}, level, active_var_keys::Se
     target.params = kwargs
     target.cache = target.recipe(getfield.(target.deps, :cache)..., target.weak_deps...; kwargs...)
     target.timestamp = time()
-    target.tree_hash = target_hash(target, hash(nothing))
+    target.tree_hash = target_hash(target)
     target.mem_only && return
 
     save(fullpath, Dict(
@@ -420,7 +420,7 @@ macro target(args...)
         xp = quote
             if $recipe_hash != $(esc(out)).hash
                 @assert typeof($(esc(out))) <: Target "Target $(esc(out)) musn't be redefined as a different type."
-                $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
+                $(esc(out)).tree_hash = target_hash($(esc(out)))
                 $(esc(out)).deps = [$(deps...)]
                 $(esc(out)).recipe = $(esc(recipe))
                 $(esc(out)).timestamp = 0.0
@@ -428,7 +428,7 @@ macro target(args...)
                 $(esc(out)).name = $(String(out))
                 $(esc(out)).hash = $recipe_hash
                 $(esc(out)).relpath = $path
-                # $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
+                # $(esc(out)).tree_hash = target_hash($(esc(out)))
                 $(esc(out)).par_keys = $(par_keys)
                 $(esc(out)).mem_only = $memonly
                 $(esc(out)).par_tfs = [$(par_tfs...)]
@@ -454,7 +454,7 @@ macro target(args...)
                 [$(weak_deps...)],
                 )
             append_deps_parameter_keys!($(esc(out)), $(esc(out)).par_keys)
-            $(esc(out)).tree_hash = target_hash($(esc(out)), hash(nothing))
+            $(esc(out)).tree_hash = target_hash($(esc(out)))
         end
     end
     return xp
@@ -539,7 +539,7 @@ macro sweep(out, recipe)
                 $(esc(out)).iteration_timestamp = 0.0
                 $(esc(out)).iteration_parameters = nothing
                 $(esc(out)).iteration_timestamps = []
-                $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)) , hash(nothing))
+                $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)))
                 $(esc(out)).par_keys = $(par_keys)
                 $(esc(out)).weak_deps = [$(weak_deps...)]
                 append_deps_parameter_keys!($(esc(out)), $(par_keys))
@@ -572,7 +572,7 @@ macro sweep(out, recipe)
                 [$(weak_deps...)],
             )
             append_deps_parameter_keys!($(esc(out)), $(esc(out)).par_keys)
-            $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)), hash(nothing))
+            $(esc(out)).tree_hash = Makeitso.target_hash($(esc(out)))
         end
     end
     return xp
@@ -660,7 +660,7 @@ function sweep(t::Target, v::Verbosity{Level}; kwargs...) where {Level}
         []            # weak dependencies
     )
     append_deps_parameter_keys!(sweep, sweep.par_keys)
-    sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
+    sweep.tree_hash = Makeitso.target_hash(sweep)
 
     df = make(sweep, v; vars..., params...)
 end
@@ -737,7 +737,7 @@ function sweep(t::Target, o::Over, v::Verbosity{Level}; kwargs...) where {Level}
         []
     )
     append_deps_parameter_keys!(sweep, sweep.par_keys)
-    sweep.tree_hash = Makeitso.target_hash(sweep, hash(nothing))
+    sweep.tree_hash = Makeitso.target_hash(sweep)
 
     df = make(sweep, v; vars..., params...)
 end
