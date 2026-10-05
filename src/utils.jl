@@ -1,16 +1,26 @@
-function target_hash(target::Target, h=hash(nothing))
+# Stable hashing based on StableHashTraits (hash version 4). Unlike `Base.hash`,
+# the result is stable across Julia sessions, versions and platforms, so it can
+# safely be used for file names and for hashes persisted to disk. The digest is
+# truncated to a UInt64 so it can be chained like `Base.hash(x, h)`.
+function stablehash(x, h::UInt64=zero(UInt64))
+    digest = StableHashTraits.stable_hash((x, h); version=4)
+    return reinterpret(UInt64, digest[1:8])[1]
+end
+
+
+function target_hash(target::Target, h=stablehash(nothing))
     for d in target.deps
         h = target_hash(d, h)
     end
     for d in target.weak_deps
         h = target_hash(d, h)
     end
-    h = hash(target.hash, h)
+    h = stablehash(target.hash, h)
     return h
 end
 
 
-function target_hash(target::Sweep, h=hash(nothing))
+function target_hash(target::Sweep, h=stablehash(nothing))
     for d in target.shared_deps
         h = target_hash(d, h)
     end
@@ -20,14 +30,14 @@ function target_hash(target::Sweep, h=hash(nothing))
         for d in target.weak_deps
         h = target_hash(d, h)
     end
-    h = hash(target.hash, h)
+    h = stablehash(target.hash, h)
     return h
 end
 
 
 function fn_pars_hash(target, config)
     bn = DrWatson.savename(config)
-    hs = hash(config)
+    hs = stablehash(config)
     hs = target_hash(target, hs)
 
     fn = bn == "" ? string(hs, base=62) : bn * "." * string(hs, base=62)
@@ -45,7 +55,7 @@ function pihash(x::Array,h)
     end
     h
 end
-pihash(x::Any,h) = hash(x,h)
+pihash(x::Any,h) = stablehash(x,h)
 
 
 function target_dirname(target)

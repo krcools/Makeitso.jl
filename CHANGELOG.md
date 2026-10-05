@@ -1,3 +1,4 @@
+- [BREAKING]: hashes are now computed with `StableHashTraits.stable_hash` (hash version 4) instead of `Base.hash`. Hashes are stable across Julia sessions, versions and platforms, but outputs stored by a previous version of `Makeitso` will not be found.
 - Fixed bug where parameters for weak dependencies where not propagated to their dependents
 - Only load requested iterations for sweeps (instead of loading all and then filtering the DF)
 - Methods `sweep(target, over; pars...)` for the ad-hoc creation of sweeps
